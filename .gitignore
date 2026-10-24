@@ -13,3 +13,5 @@ selenium-debug.log
 *.ntvs*
 *.njsproj
 *.slnnode_modules/
+wristmemo-qr.png
+dist/
