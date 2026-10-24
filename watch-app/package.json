@@ -1,0 +1,13 @@
+{
+  "name": "wristmemo-watch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Zepp OS mini app: capture memos on Amazfit Bip 6",
+  "scripts": {
+    "dev": "zeus dev",
+    "build": "zeus build",
+    "preview": "zeus preview"
+  },
+  "devDependencies": { "@zeppos/device-types": "^3.0.0" },
+  "dependencies": { "@zeppos/zml": "^0.0.38" }
+}
