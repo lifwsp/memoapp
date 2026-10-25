@@ -20,3 +20,16 @@ export type Note = {
   created_at: string;
   updated_at: string;
 };
+
+export type ExternalLink = {
+  id: string;
+  note_id: string;
+  type: "todoist" | "calendar";
+  status: "ok" | "error";
+  url: string | null;
+  title: string | null;
+  due: string | null;
+  error: string | null;
+  via: "web" | "watch" | "mcp";
+  created_at: string;
+};
