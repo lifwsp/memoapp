@@ -16,3 +16,4 @@ selenium-debug.log
 wristmemo-qr.png
 dist/
 watch-app/app-side/config.js
+.env.local
