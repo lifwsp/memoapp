@@ -57,7 +57,9 @@ function Login() {
 
 function Notes({ session }: { session: Session }) {
   const [notes, setNotes] = useState<Note[]>([]);
-  const [view, setView] = useState<View>(() => (location.hash.includes("google=") ? "settings" : "notes"));
+  const [view, setView] = useState<View>(() =>
+    /[?&](code|error)=/.test(location.search) ? "settings" : "notes",
+  );
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<Note | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -412,11 +414,27 @@ function SendPanel({ note, text }: { note: Note; text: string }) {
 function Settings() {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
-  const [result] = useState(() => {
-    const m = location.hash.match(/google=([^&]+)/);
-    if (m) history.replaceState(null, "", location.pathname + location.search);
-    return m ? decodeURIComponent(m[1]) : "";
-  });
+  const [result, setResult] = useState("");
+
+  // Google の同意画面から ?code=…&state=… 付きで戻ってきたら、サーバーに渡して接続を終える
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const code = q.get("code");
+    const state = q.get("state");
+    const err = q.get("error");
+    if (!code && !err) return;
+    history.replaceState(null, "", location.pathname);
+    if (err || !code || !state) {
+      setResult(`error:${err ?? "no_code"}`);
+      return;
+    }
+    api
+      .googleExchange(code, state)
+      .then(() => setResult("ok"))
+      .catch((e) => setResult(`error:${e instanceof Error ? e.message : e}`))
+      .finally(refresh);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function refresh() {
     try {

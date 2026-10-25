@@ -3,12 +3,11 @@
 //   POST /send                   メモを Todoist / カレンダーへ送る {note_id, target, text?, date?, time?, duration_min?}
 //   POST /preview                日時の読み取り結果だけ返す {text}
 //   POST /google/start           Google の同意画面 URL を返す
-//   GET  /google/callback        Google から戻ってくる先（JWT なし。state で照合）
+//   POST /google/exchange        PWA に戻ってきた code を渡して接続を完了 {code, state}
 //   POST /google/disconnect      Google の接続を解除
-// 認証: callback 以外は Supabase のログイン JWT（Authorization: Bearer）。デプロイは --no-verify-jwt で、ここで確かめる。
+// 認証: すべて Supabase のログイン JWT（Authorization: Bearer）。デプロイは --no-verify-jwt で、ここで確かめる。
 import {
   admin,
-  APP_URL,
   cors,
   googleAuthUrl,
   googleConfigured,
@@ -32,31 +31,6 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^.*\/integrations/, "") || "/";
   const sb = admin();
-
-  // Google から戻ってくる先だけはブラウザの遷移なので JWT がない
-  if (path === "/google/callback" && req.method === "GET") {
-    const back = (msg: string) => Response.redirect(`${APP_URL}#google=${encodeURIComponent(msg)}`, 302);
-    const state = url.searchParams.get("state") ?? "";
-    const code = url.searchParams.get("code");
-    const { data: st } = await sb.from("oauth_states").delete().eq("state", state).select().maybeSingle();
-    if (!st || Date.now() - new Date(st.created_at).getTime() > 10 * 60_000) return back("error:state");
-    if (!code) return back(`error:${url.searchParams.get("error") ?? "no_code"}`);
-    try {
-      const tok = await googleExchange(code);
-      if (!tok.refresh_token) return back("error:no_refresh_token");
-      await sb.from("integration_tokens").upsert({
-        provider: "google",
-        refresh_token: tok.refresh_token,
-        access_token: tok.access_token,
-        expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
-        account: tok.account,
-        updated_at: new Date().toISOString(),
-      });
-      return back("ok");
-    } catch (e) {
-      return back(`error:${e instanceof Error ? e.message : "exchange"}`);
-    }
-  }
 
   if (!(await requireOwner(req))) return json(401, { error: "unauthorized" });
 
@@ -104,6 +78,32 @@ Deno.serve(async (req) => {
     const state = crypto.randomUUID();
     await sb.from("oauth_states").insert({ state });
     return json(200, { url: googleAuthUrl(state) });
+  }
+
+  // Google の同意画面から PWA に戻ってきたあと、PWA が code と state を渡してくる
+  if (path === "/google/exchange" && req.method === "POST") {
+    const state = String(p.state ?? "");
+    const code = String(p.code ?? "");
+    const { data: st } = await sb.from("oauth_states").delete().eq("state", state).select().maybeSingle();
+    if (!st || Date.now() - new Date(st.created_at).getTime() > 10 * 60_000) {
+      return json(400, { error: "やり直してください（state が無効か期限切れ）" });
+    }
+    if (!code) return json(400, { error: "code がありません" });
+    try {
+      const tok = await googleExchange(code);
+      if (!tok.refresh_token) return json(400, { error: "refresh token が返りませんでした" });
+      await sb.from("integration_tokens").upsert({
+        provider: "google",
+        refresh_token: tok.refresh_token,
+        access_token: tok.access_token,
+        expires_at: new Date(Date.now() + tok.expires_in * 1000).toISOString(),
+        account: tok.account,
+        updated_at: new Date().toISOString(),
+      });
+      return json(200, { ok: true, account: tok.account });
+    } catch (e) {
+      return json(400, { error: e instanceof Error ? e.message : "exchange failed" });
+    }
   }
 
   if (path === "/google/disconnect" && req.method === "POST") {

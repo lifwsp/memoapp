@@ -7,9 +7,10 @@ const TODOIST_TOKEN = Deno.env.get("TODOIST_TOKEN") ?? "";
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
 const GOOGLE_CALENDAR_ID = Deno.env.get("GOOGLE_CALENDAR_ID") ?? "primary";
-export const APP_URL = Deno.env.get("APP_URL") ?? "https://lifwsp.github.io/wristmemo/";
+export const APP_URL = Deno.env.get("APP_URL") ?? "https://lifwsp.github.io/memoapp/";
 export const FUNCTIONS_URL = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
-export const GOOGLE_REDIRECT_URI = `${FUNCTIONS_URL}/integrations/google/callback`;
+// Google の承認済みドメインに supabase.co は登録できないため、戻り先は PWA 自身にする
+export const GOOGLE_REDIRECT_URI = APP_URL;
 
 export function admin(): SupabaseClient {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);

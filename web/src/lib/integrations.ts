@@ -26,5 +26,7 @@ export const api = {
   send: (p: { note_id: string; target: "todoist" | "calendar"; text: string; date: string | null; time: string | null }) =>
     call<{ ok: true; url: string | null }>("/send", p),
   googleStart: () => call<{ url: string }>("/google/start", {}),
+  googleExchange: (code: string, state: string) =>
+    call<{ ok: true; account: string | null }>("/google/exchange", { code, state }),
   googleDisconnect: () => call<{ ok: true }>("/google/disconnect", {}),
 };

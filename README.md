@@ -8,7 +8,7 @@ Bip 6 (watch-app) ──BLE──> iPhone Zepp アプリ (Side Service) ──HT
                                                                                       PWA (web/) <──realtime──┘
 ```
 
-- PWA: https://lifwsp.github.io/wristmemo/ （`main` に push すると GitHub Actions で自動デプロイ）
+- PWA: https://lifwsp.github.io/memoapp/ （`main` に push すると GitHub Actions で自動デプロイ）
 - 秘密の値はすべて git 管理外: `.env.local`（Supabase のトークン・DB パスワード・WATCH_TOKEN・OWNER_USER_ID・OWNER_PASSWORD）、`web/.env.local`、`watch-app/app-side/config.js`
 
 ## watch-app/（Zepp OS 4.2）
