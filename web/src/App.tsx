@@ -1,4 +1,25 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Archive,
+  ArchiveRestore,
+  CalendarDays,
+  Check,
+  Ellipsis,
+  Hash,
+  Inbox,
+  Layers,
+  LogOut,
+  PanelLeft,
+  Pin,
+  PinOff,
+  Plus,
+  Settings2,
+  Sun,
+  Trash2,
+  Watch,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, type ExternalLink, type Note } from "./lib/supabase";
 import { api, type Parsed, type Status } from "./lib/integrations";
@@ -261,7 +282,7 @@ function Notes({ session }: { session: Session }) {
       <main className="main">
         <header className="topbar">
           <button className="icon desktop-only" title="サイドバー（[）" onClick={() => setSidebarOpen((o) => !o)}>
-            ☰
+            <PanelLeft size={18} strokeWidth={1.75} />
           </button>
           <h1>{title}</h1>
           <input
@@ -325,13 +346,13 @@ function Notes({ session }: { session: Session }) {
       <nav className="tabbar">
         {(["inbox", "today", "upcoming", "all"] as const).map((k) => (
           <button key={k} className={view.kind === k && !query ? "active" : ""} onClick={() => go({ kind: k })}>
-            <span className="tab-icon">{TAB_ICON[k]}</span>
+            <TabIcon k={k} />
             {VIEW_LABEL[k]}
             {k !== "all" && k !== "upcoming" && counts[k] > 0 && <span className="tab-count">{counts[k]}</span>}
           </button>
         ))}
         <button className={drawer ? "active" : ""} onClick={() => setDrawer(true)}>
-          <span className="tab-icon">≡</span>
+          <Ellipsis className="tab-icon" size={22} strokeWidth={1.75} />
           その他
         </button>
       </nav>
@@ -355,7 +376,21 @@ function Notes({ session }: { session: Session }) {
   );
 }
 
-const TAB_ICON = { inbox: "📥", today: "☀︎", upcoming: "📅", all: "🗂" } as const;
+const VIEW_ICON: Record<string, LucideIcon> = {
+  inbox: Inbox,
+  today: Sun,
+  upcoming: CalendarDays,
+  all: Layers,
+  tag: Hash,
+  archive: Archive,
+  trash: Trash2,
+  settings: Settings2,
+};
+
+function TabIcon({ k }: { k: string }) {
+  const I = VIEW_ICON[k];
+  return <I className="tab-icon" size={22} strokeWidth={1.75} />;
+}
 
 function emptyText(view: View, searching: boolean) {
   if (searching) return "見つかりません";
@@ -388,7 +423,13 @@ function Sidebar({
 }) {
   const item = (v: View, count?: number) => (
     <button key={viewKey(v)} className={viewKey(v) === viewKey(view) ? "active" : ""} onClick={() => onGo(v)}>
-      <span>{viewLabel(v)}</span>
+      <span className="nav-label">
+        {(() => {
+          const I = VIEW_ICON[v.kind];
+          return <I size={16} strokeWidth={1.75} />;
+        })()}
+        {v.kind === "tag" ? v.tag : viewLabel(v)}
+      </span>
       {!!count && <span className="count">{count}</span>}
     </button>
   );
@@ -406,7 +447,10 @@ function Sidebar({
       {item({ kind: "trash" })}
       {item({ kind: "settings" })}
       <button className="muted" onClick={onLogout}>
-        ログアウト
+        <span className="nav-label">
+          <LogOut size={16} strokeWidth={1.75} />
+          ログアウト
+        </span>
       </button>
     </div>
   );
@@ -441,7 +485,7 @@ function QuickAdd({
         await onAdd(t);
       }}
     >
-      <span className="plus">＋</span>
+      <Plus className="plus" size={18} strokeWidth={2.25} />
       <input
         ref={inputRef}
         value={text}
@@ -494,10 +538,18 @@ function NoteList({
                     onToggle(n);
                   }}
                 >
-                  {n.done_at ? "✓" : ""}
+                  {n.done_at && <Check size={13} strokeWidth={3} />}
                 </button>
               ) : (
-                <span className="dot">{n.pinned ? "📌" : n.source === "watch" ? "⌚" : "・"}</span>
+                <span className="dot">
+                  {n.pinned ? (
+                    <Pin size={14} strokeWidth={2} />
+                  ) : n.source === "watch" ? (
+                    <Watch size={14} strokeWidth={2} />
+                  ) : (
+                    <span className="bullet" />
+                  )}
+                </span>
               )}
               <div className="row-main">
                 <div className="row-title">{headline(n)}</div>
@@ -578,23 +630,23 @@ function Detail({
             onClose();
           }}
         >
-          ✕
+          <X size={18} strokeWidth={1.75} />
         </button>
         <span className="spacer" />
         {!trashed && (
           <>
             <button className="icon" title={note.pinned ? "ピンを外す" : "ピン留め"} onClick={() => onPatch({ pinned: !note.pinned })}>
-              {note.pinned ? "📌" : "📍"}
+              {note.pinned ? <PinOff size={18} strokeWidth={1.75} /> : <Pin size={18} strokeWidth={1.75} />}
             </button>
             <button
               className="icon"
               title={note.archived ? "アーカイブ解除" : "アーカイブ"}
               onClick={() => onPatch({ archived: !note.archived, pinned: false })}
             >
-              {note.archived ? "↩︎" : "🗄"}
+              {note.archived ? <ArchiveRestore size={18} strokeWidth={1.75} /> : <Archive size={18} strokeWidth={1.75} />}
             </button>
             <button className="icon" title="ゴミ箱へ" onClick={onTrash}>
-              🗑
+              <Trash2 size={18} strokeWidth={1.75} />
             </button>
           </>
         )}
@@ -613,7 +665,7 @@ function Detail({
       <div className="detail-title">
         {note.is_task && (
           <button className={`check big p${note.priority} ${note.done_at ? "is-done" : ""}`} onClick={onToggleDone} disabled={trashed}>
-            {note.done_at ? "✓" : ""}
+            {note.done_at && <Check size={15} strokeWidth={3} />}
           </button>
         )}
         <input
@@ -743,7 +795,9 @@ function TagEditor({
       {tags.map((t) => (
         <span key={t} className="tag chip">
           #{t}
-          {!disabled && <button onClick={() => onChange(tags.filter((x) => x !== t))}>×</button>}
+          {!disabled && <button aria-label="タグを外す" onClick={() => onChange(tags.filter((x) => x !== t))}>
+              <X size={12} strokeWidth={2.25} />
+            </button>}
         </span>
       ))}
       {!disabled && (
