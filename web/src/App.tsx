@@ -55,8 +55,11 @@ function Login() {
   return (
     <form className="login" onSubmit={submit}>
       <h1>WristMemo</h1>
+      {/* iPhone のパスワード管理（キーチェーン）が保存・自動入力できるように、ユーザー名も渡す */}
+      <input type="text" name="username" autoComplete="username" value={OWNER_EMAIL} readOnly hidden />
       <input
         type="password"
+        name="password"
         placeholder="パスワード"
         autoComplete="current-password"
         value={password}
