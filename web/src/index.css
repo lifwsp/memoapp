@@ -1,0 +1,141 @@
+:root {
+  --bg: #fafaf7;
+  --card: #ffffff;
+  --ink: #202124;
+  --muted: #6b6b6b;
+  --line: #e3e1da;
+  --accent: #f5c518;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input, textarea { font: inherit; color: inherit; }
+/* iOS は 16px 未満の入力欄にフォーカスするとズームするため */
+input, textarea { font-size: 16px; }
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 8px) 12px calc(env(safe-area-inset-bottom) + 24px);
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--bg);
+  padding: 8px 0;
+}
+.search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+nav { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+nav button {
+  border: none;
+  background: transparent;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+nav button.active { background: var(--accent); color: var(--ink); font-weight: 600; }
+nav .logout { margin-left: auto; font-size: 13px; }
+
+.composer {
+  margin: 12px 0 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.composer.closed { color: var(--muted); cursor: text; }
+.composer input, .composer textarea, .editor input, .editor textarea {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  padding: 4px 0;
+}
+.composer input, .editor input { font-weight: 600; }
+
+h2 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 16px 4px 8px; letter-spacing: 0.05em; }
+
+.grid { columns: 2 160px; column-gap: 10px; }
+.card {
+  break-inside: avoid;
+  margin-bottom: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px 10px;
+  cursor: pointer;
+}
+.card h3 { margin: 0 0 6px; font-size: 15px; }
+.card p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card footer { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--muted); }
+.badge { background: #f1efe8; border-radius: 6px; padding: 1px 6px; }
+
+.empty, .error { text-align: center; color: var(--muted); margin: 32px 0; }
+.error { color: #b3261e; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: calc(env(safe-area-inset-top) + 24px) 12px 12px;
+  overflow-y: auto;
+}
+.editor {
+  width: 100%;
+  max-width: 600px;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.editor textarea { min-height: 120px; }
+.meta { font-size: 12px; color: var(--muted); margin: 8px 0; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; }
+.actions button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+.actions .primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.actions .danger { color: #b3261e; }
+.spacer { flex: 1; }
+
+.login {
+  max-width: 320px;
+  margin: 20vh auto 0;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.login h1 { text-align: center; margin: 0 0 8px; }
+.login input { padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.login button { padding: 12px; border: none; border-radius: 10px; background: var(--accent); font-weight: 600; }
+.login button:disabled { opacity: 0.5; }
