@@ -1,0 +1,35 @@
+- generic [ref=e7]:
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - heading "#買い物" [level=1] [ref=e212]
+      - searchbox "検索（/）" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: ＋
+      - textbox "#買い物 にメモを追加（Enter）" [ref=e213]
+    - list [ref=e38]:
+      - listitem [ref=e214] [cursor=pointer]:
+        - button "完了にする" [ref=e215]
+        - generic [ref=e216]:
+          - generic [ref=e217]: UIテスト 牛乳を買う
+          - generic [ref=e218]:
+            - generic [ref=e219]: 予定 今日
+            - generic [ref=e220]: "#買い物"
+    - button "完了したものを表示" [ref=e221] [cursor=pointer]
+  - navigation [ref=e153]:
+    - button "📥 受信箱 3" [ref=e154] [cursor=pointer]:
+      - generic [ref=e155]: 📥
+      - text: 受信箱
+      - generic [ref=e156]: "3"
+    - button "☀︎ 今日 1" [ref=e157] [cursor=pointer]:
+      - generic [ref=e158]: ☀︎
+      - text: 今日
+      - generic [ref=e159]: "1"
+    - button "📅 今後の予定" [ref=e160] [cursor=pointer]:
+      - generic [ref=e161]: 📅
+      - text: 今後の予定
+    - button "🗂 すべて" [ref=e162] [cursor=pointer]:
+      - generic [ref=e163]: 🗂
+      - text: すべて
+    - button "≡ その他" [ref=e164] [cursor=pointer]:
+      - generic [ref=e165]: ≡
+      - text: その他

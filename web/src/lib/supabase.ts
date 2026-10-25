@@ -17,6 +17,13 @@ export type Note = {
   deleted_at: string | null;
   source: "web" | "watch" | "mcp";
   input_kind: string | null;
+  tags: string[];
+  is_task: boolean;
+  done_at: string | null;
+  due_date: string | null; // YYYY-MM-DD
+  due_time: string | null; // HH:MM:SS
+  scheduled_date: string | null;
+  priority: number; // 0 なし / 1 低 / 2 中 / 3 高
   created_at: string;
   updated_at: string;
 };

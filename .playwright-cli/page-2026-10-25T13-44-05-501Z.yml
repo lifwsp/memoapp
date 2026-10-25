@@ -1,0 +1,59 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 3" [ref=e36] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e37]: "3"
+      - button "今日" [ref=e13] [cursor=pointer]
+      - button "今後の予定" [ref=e15] [cursor=pointer]
+      - button "すべて" [ref=e17] [cursor=pointer]
+      - generic [ref=e57]: タグ
+      - button "#買い物 1" [ref=e58] [cursor=pointer]:
+        - generic [ref=e59]: "#買い物"
+        - generic [ref=e60]: "1"
+      - button "アーカイブ" [ref=e20] [cursor=pointer]
+      - button "ゴミ箱" [ref=e22] [cursor=pointer]
+      - button "連携" [ref=e24] [cursor=pointer]
+      - button "ログアウト" [ref=e26] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - button "☰" [ref=e29] [cursor=pointer]
+      - heading "受信箱" [level=1] [ref=e30]
+      - searchbox "検索（/）" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: ＋
+      - textbox "メモを追加（Enter・#タグ も書けます）" [ref=e34]
+    - list [ref=e38]:
+      - listitem [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: ⌚
+        - generic [ref=e41]:
+          - generic [ref=e42]: アプリを閉じて話しています
+          - generic [ref=e43]: 09:48
+      - listitem [ref=e45] [cursor=pointer]:
+        - generic [ref=e46]: ⌚
+        - generic [ref=e47]:
+          - generic [ref=e48]: 製薬祭に行く
+          - generic [ref=e49]: 09:46
+      - listitem [ref=e51] [cursor=pointer]:
+        - generic [ref=e52]: ⌚
+        - generic [ref=e53]:
+          - generic [ref=e54]: テストテスト
+          - generic [ref=e55]: 09:38
+  - complementary [ref=e61]:
+    - generic [ref=e62]:
+      - button "✕" [ref=e63] [cursor=pointer]
+      - button "📍" [ref=e64] [cursor=pointer]
+      - button "🗄" [ref=e65] [cursor=pointer]
+      - button "🗑" [ref=e66] [cursor=pointer]
+    - textbox "タイトル" [ref=e68]
+    - textbox "メモ" [ref=e69]: アプリを閉じて話しています
+    - textbox "＋タグを付ける" [ref=e71]
+    - generic [ref=e73]:
+      - generic [ref=e74]: タスク
+      - checkbox "タスク" [ref=e75]
+    - generic [ref=e76]:
+      - generic [ref=e77]: 送る
+      - button "Todoist へ" [ref=e78] [cursor=pointer]
+      - button "カレンダーへ" [ref=e79] [cursor=pointer]
+    - paragraph [ref=e80]: ウォッチ（音声）から 09:48

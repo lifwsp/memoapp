@@ -1,0 +1,28 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 3" [ref=e36] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e37]: "3"
+      - button "今日" [ref=e135] [cursor=pointer]
+      - button "今後の予定" [ref=e15] [cursor=pointer]
+      - button "すべて" [ref=e17] [cursor=pointer]
+      - button "アーカイブ" [ref=e20] [cursor=pointer]
+      - button "ゴミ箱" [ref=e22] [cursor=pointer]
+      - button "連携" [ref=e24] [cursor=pointer]
+      - button "ログアウト" [ref=e26] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - button "☰" [ref=e29] [cursor=pointer]
+      - heading "今日" [level=1] [ref=e133]
+      - searchbox "検索（/）" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: ＋
+      - textbox "今日やることを追加（Enter）" [ref=e134]
+    - list
+    - paragraph [ref=e136]: 今日やることはありません
+    - button "完了したものを表示" [ref=e90] [cursor=pointer]
+  - generic [ref=e137]:
+    - generic [ref=e138]: "完了: UIテスト 牛乳を買う"
+    - button "元に戻す" [ref=e139] [cursor=pointer]

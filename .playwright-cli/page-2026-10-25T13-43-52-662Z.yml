@@ -1,0 +1,22 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱" [ref=e11] [cursor=pointer]
+      - button "今日" [ref=e13] [cursor=pointer]
+      - button "今後の予定" [ref=e15] [cursor=pointer]
+      - button "すべて" [ref=e17] [cursor=pointer]
+      - button "アーカイブ" [ref=e20] [cursor=pointer]
+      - button "ゴミ箱" [ref=e22] [cursor=pointer]
+      - button "連携" [ref=e24] [cursor=pointer]
+      - button "ログアウト" [ref=e26] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - button "☰" [ref=e29] [cursor=pointer]
+      - heading "受信箱" [level=1] [ref=e30]
+      - searchbox "検索（/）" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: ＋
+      - textbox "メモを追加（Enter・#タグ も書けます）" [ref=e34]
+    - list
+    - paragraph [ref=e35]: 受信箱は空です。タグを付けたメモはここから消えます。

@@ -1,0 +1,4 @@
+- generic [ref=e3]:
+  - heading "WristMemo" [level=1] [ref=e4]
+  - textbox "パスワード" [active] [ref=e5]
+  - button "ログイン" [disabled] [ref=e6] [cursor=pointer]

@@ -1,0 +1,37 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 3" [ref=e36] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e37]: "3"
+      - button "今日 1" [ref=e140] [cursor=pointer]:
+        - generic [ref=e14]: 今日
+        - generic [ref=e141]: "1"
+      - button "今後の予定" [ref=e15] [cursor=pointer]
+      - button "すべて" [ref=e17] [cursor=pointer]
+      - generic [ref=e142]: タグ
+      - button "#買い物 1" [ref=e143] [cursor=pointer]:
+        - generic [ref=e144]: "#買い物"
+        - generic [ref=e145]: "1"
+      - button "アーカイブ" [ref=e20] [cursor=pointer]
+      - button "ゴミ箱" [ref=e22] [cursor=pointer]
+      - button "連携" [ref=e24] [cursor=pointer]
+      - button "ログアウト" [ref=e26] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - button "☰" [ref=e29] [cursor=pointer]
+      - heading "今日" [level=1] [ref=e133]
+      - searchbox "検索（/）" [ref=e31]
+    - generic [ref=e32]:
+      - generic [ref=e33]: ＋
+      - textbox "今日やることを追加（Enter）" [ref=e134]
+    - list [ref=e38]:
+      - listitem [ref=e146] [cursor=pointer]:
+        - button "完了にする" [ref=e147]
+        - generic [ref=e148]:
+          - generic [ref=e149]: UIテスト 牛乳を買う
+          - generic [ref=e150]:
+            - generic [ref=e151]: 予定 今日
+            - generic [ref=e152]: "#買い物"
+    - button "完了したものを表示" [ref=e90] [cursor=pointer]
