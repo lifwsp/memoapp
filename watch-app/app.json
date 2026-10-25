@@ -1,7 +1,7 @@
 {
   "configVersion": "v3",
   "app": {
-    "appId": 1000001,
+    "appId": 1132828,
     "appName": "WristMemo",
     "appType": "app",
     "version": { "code": 1, "name": "0.1.0" },
