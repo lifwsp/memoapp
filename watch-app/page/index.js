@@ -76,9 +76,12 @@ Page(
     async flush() {
       if (this.state.flushing) return;
       this.state.flushing = true;
+      const tried = {};
       try {
-        for (const memo of this.state.queue) {
-          if (memo.status === "sent") continue;
+        // 送信中に新しいメモが追加されても取りこぼさないよう、未試行がなくなるまで回す
+        let memo;
+        while ((memo = this.state.queue.find((m) => m.status !== "sent" && !tried[m.id]))) {
+          tried[memo.id] = true;
           try {
             const res = await this.request({
               method: "ADD_NOTE",
@@ -91,7 +94,7 @@ Page(
             logger.log("send failed", e && (e.message || e.reason));
             memo.status = "error";
             memo.error = "phone";
-            break;
+            this.state.queue.forEach((m) => { tried[m.id] = true; });
           } finally {
             this.state.queue = saveQueue(this.state.queue);
             this.render();

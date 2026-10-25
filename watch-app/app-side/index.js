@@ -1,10 +1,11 @@
 // Side Service: iPhone / Android の Zepp アプリ内で動く。
 // ウォッチから受け取ったメモを、設定画面で入れた受け口 URL に HTTPS で POST する。
 import { BaseSideService } from "@zeppos/zml/base-side";
+import { DEFAULT_ENDPOINT, DEFAULT_TOKEN } from "./config";
 
 async function postNote(settings, params) {
-  const endpoint = settings.getItem("endpoint");
-  const token = settings.getItem("token");
+  const endpoint = settings.getItem("endpoint") || DEFAULT_ENDPOINT;
+  const token = settings.getItem("token") || DEFAULT_TOKEN;
   if (!endpoint) return { ok: false, error: "endpoint未設定" };
 
   const res = await fetch({
