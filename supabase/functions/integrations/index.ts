@@ -1,6 +1,7 @@
 // /functions/v1/integrations/...  PWA から呼ぶ連携 API
 //   GET  /status                 接続状況
-//   POST /send                   メモを Todoist / カレンダーへ送る {note_id, target, text?, date?, time?, duration_min?}
+//   GET  /events?from=&to=       Google カレンダーの予定（日本時間の日付、両端を含む。最大 62 日）
+//   POST /send                   メモをカレンダーの予定にする {note_id, text?, date?, time?, duration_min?}
 //   POST /preview                日時の読み取り結果だけ返す {text}
 //   POST /google/start           Google の同意画面 URL を返す
 //   POST /google/exchange        PWA に戻ってきた code を渡して接続を完了 {code, state}
@@ -13,9 +14,9 @@ import {
   googleConfigured,
   googleExchange,
   json,
+  listCalendarEvents,
   OWNER_USER_ID,
   sendNote,
-  todoistConfigured,
 } from "../_shared/integrations.ts";
 import { parseWhen } from "../_shared/jpdate.ts";
 
@@ -37,9 +38,23 @@ Deno.serve(async (req) => {
   if (path === "/status" && req.method === "GET") {
     const { data } = await sb.from("integration_tokens").select("account").eq("provider", "google").maybeSingle();
     return json(200, {
-      todoist: todoistConfigured(),
       google: { configured: googleConfigured(), connected: !!data, account: data?.account ?? null },
     });
+  }
+
+  if (path === "/events" && req.method === "GET") {
+    const from = url.searchParams.get("from") ?? "";
+    const to = url.searchParams.get("to") ?? "";
+    const re = /^\d{4}-\d{2}-\d{2}$/;
+    if (!re.test(from) || !re.test(to) || to < from) return json(400, { error: "from / to は YYYY-MM-DD" });
+    if ((Date.parse(to) - Date.parse(from)) / 86400_000 > 62) return json(400, { error: "期間は 62 日まで" });
+    const { data } = await sb.from("integration_tokens").select("provider").eq("provider", "google").maybeSingle();
+    if (!data) return json(200, { connected: false, events: [] });
+    try {
+      return json(200, { connected: true, events: await listCalendarEvents(sb, from, to) });
+    } catch (e) {
+      return json(200, { connected: true, events: [], error: e instanceof Error ? e.message : String(e) });
+    }
   }
 
   let p: Record<string, unknown> = {};
@@ -55,8 +70,8 @@ Deno.serve(async (req) => {
 
   if (path === "/send" && req.method === "POST") {
     const noteId = String(p.note_id ?? "");
-    const target = p.target === "calendar" ? "calendar" : p.target === "todoist" ? "todoist" : null;
-    if (!noteId || !target) return json(400, { error: "note_id と target が必要です" });
+    const target = "calendar" as const;
+    if (!noteId) return json(400, { error: "note_id が必要です" });
     const { data: note } = await sb.from("notes").select("id,title,body").eq("id", noteId).maybeSingle();
     if (!note) return json(404, { error: "メモが見つかりません" });
     const text = typeof p.text === "string" && p.text.trim() ? p.text : note.title || note.body;

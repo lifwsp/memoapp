@@ -1,0 +1,31 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 15" [ref=e165] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e67]: "15"
+      - button "今日 1" [ref=e166] [cursor=pointer]:
+        - generic [ref=e17]: 今日
+        - generic [ref=e167]: "1"
+      - button [ref=e24] [cursor=pointer]
+      - button [ref=e28] [cursor=pointer]
+      - button [ref=e35] [cursor=pointer]
+      - button [ref=e40] [cursor=pointer]
+      - button [ref=e45] [cursor=pointer]
+      - button [ref=e50] [cursor=pointer]
+  - main [ref=e55]:
+    - generic [ref=e56]:
+      - button "サイドバー（[）" [ref=e57] [cursor=pointer]
+      - heading "今日" [level=1] [ref=e160]
+      - searchbox "検索（/）" [ref=e61]
+    - textbox "今日やることを追加（Enter）" [active] [ref=e161]
+    - list [ref=e68]:
+      - listitem [ref=e168] [cursor=pointer]:
+        - button "完了にする" [ref=e169]
+        - generic [ref=e170]:
+          - generic [ref=e171]: ZZ布団干し
+          - generic [ref=e172]:
+            - generic [ref=e173]: 締切 今日
+            - generic [ref=e174]: 3週間ごと（完了日から）
+    - button "完了したものを表示" [ref=e163] [cursor=pointer]

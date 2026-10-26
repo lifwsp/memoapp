@@ -261,3 +261,19 @@ input, textarea { font-size: 16px; }
 .settings section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 12px 0; }
 .settings h3 { margin: 0 0 6px; font-size: 15px; }
 .settings p { margin: 4px 0; font-size: 14px; }
+
+/* ---------- 合流ビュー（カレンダーの予定） ---------- */
+.list.events { margin-bottom: 4px; }
+.row.event { cursor: pointer; align-items: stretch; }
+.event-bar { width: 4px; border-radius: 2px; flex: 0 0 4px; margin: 2px 8px 2px 7px; }
+.event-time { font-variant-numeric: tabular-nums; color: var(--text, #222); }
+.event-loc { display: inline-flex; align-items: center; gap: 2px; }
+.list-sep { padding-top: 10px; }
+.row-meta .repeat { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---------- 繰り返し ---------- */
+.repeat-edit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.repeat-edit input { flex: 1; min-width: 140px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.prop-error { margin: -2px 0 6px; }
+.error.small { font-size: 12px; }

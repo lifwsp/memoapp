@@ -111,7 +111,7 @@ export function parseWhen(input: string, now: Date = new Date()): ParsedWhen | n
   };
 }
 
-export type Route = { target: "todoist" | "calendar"; text: string };
+export type Route = { target: "task" | "calendar"; text: string };
 
 /** ウォッチのメモ先頭の言葉で送り先を決める（「タスク、牛乳を買う」「予定 明日15時 歯医者」） */
 export function routeByPrefix(body: string): Route | null {
@@ -119,5 +119,5 @@ export function routeByPrefix(body: string): Route | null {
   if (!m) return null;
   const text = body.trim().slice(m[0].length).trim();
   if (!text) return null;
-  return { target: /予定|カレンダー/.test(m[1]) ? "calendar" : "todoist", text };
+  return { target: /予定|カレンダー/.test(m[1]) ? "calendar" : "task", text };
 }

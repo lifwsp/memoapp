@@ -1,0 +1,23 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 14" [ref=e164] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e67]: "14"
+      - button [ref=e16] [cursor=pointer]
+      - button [ref=e24] [cursor=pointer]
+      - button [ref=e28] [cursor=pointer]
+      - button [ref=e35] [cursor=pointer]
+      - button [ref=e40] [cursor=pointer]
+      - button [ref=e45] [cursor=pointer]
+      - button [ref=e50] [cursor=pointer]
+  - main [ref=e55]:
+    - generic [ref=e56]:
+      - button "サイドバー（[）" [ref=e57] [cursor=pointer]
+      - heading "今日" [level=1] [ref=e160]
+      - searchbox "検索（/）" [ref=e61]
+    - textbox "今日やることを追加（Enter）" [active] [ref=e161]
+    - list
+    - paragraph [ref=e162]: 今日やることはありません
+    - button "完了したものを表示" [ref=e163] [cursor=pointer]

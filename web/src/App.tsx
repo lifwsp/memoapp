@@ -11,8 +11,10 @@ import {
   LogOut,
   PanelLeft,
   Pin,
+  MapPin,
   PinOff,
   Plus,
+  Repeat,
   Settings2,
   Sun,
   Trash2,
@@ -22,7 +24,8 @@ import {
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, type ExternalLink, type Note } from "./lib/supabase";
-import { api, type Parsed, type Status } from "./lib/integrations";
+import { api, type CalendarEvent, type Parsed, type Status } from "./lib/integrations";
+import { asRule, describeRepeat, parseRepeat, taskFromText } from "./lib/repeat";
 import {
   countTags,
   extractTags,
@@ -109,6 +112,8 @@ function Notes({ session }: { session: Session }) {
   const [drawer, setDrawer] = useState(false); // スマホのメニュー
   const [toast, setToast] = useState<Toast | null>(null);
   const [loadError, setLoadError] = useState("");
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [calError, setCalError] = useState("");
   const addRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const toastTimer = useRef<number>(0);
@@ -148,6 +153,25 @@ function Notes({ session }: { session: Session }) {
   }, []);
 
   useEffect(() => localStorage.setItem("sidebar", sidebarOpen ? "1" : "0"), [sidebarOpen]);
+
+  // 合流ビュー: 「今日」「今後の予定」では Google カレンダーの予定も読んで並べる（予定の本体はカレンダー）
+  const wantsCalendar = view.kind === "today" || view.kind === "upcoming";
+  async function loadEvents() {
+    try {
+      const r = await api.events(jstDate(), jstDate(30));
+      setEvents(r.events);
+      setCalError(r.error ?? "");
+    } catch (e) {
+      setCalError(e instanceof Error ? e.message : String(e));
+    }
+  }
+  useEffect(() => {
+    if (!wantsCalendar) return;
+    loadEvents();
+    const onVisible = () => document.visibilityState === "visible" && loadEvents();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [wantsCalendar]);
 
   const shown = useMemo(
     () => (query.trim() ? searchNotes(notes, query) : filterNotes(notes, view, showDone)),
@@ -191,17 +215,35 @@ function Notes({ session }: { session: Session }) {
       source: "web",
       tags: view.kind === "tag" ? [...new Set([view.tag, ...t])] : t,
     };
-    if (view.kind === "today") Object.assign(row, { is_task: true, scheduled_date: jstDate() });
-    if (view.kind === "upcoming") Object.assign(row, { is_task: true, scheduled_date: jstDate(1) });
+    if (view.kind === "today" || view.kind === "upcoming") {
+      // 「毎月1日 カード支払い」「明日15時 電話」のような日時・繰り返しの言葉を読む
+      const f = taskFromText(rest);
+      Object.assign(row, { is_task: true, body: f.title, ...f });
+      if (!f.due_date) row.scheduled_date = jstDate(view.kind === "today" ? 0 : 1);
+    }
     const { data, error } = await supabase.from("notes").insert(row).select().single();
     if (error) return flash({ text: `保存できませんでした: ${error.message}` });
     setNotes((ns) => [data as Note, ...ns.filter((n) => n.id !== (data as Note).id)]);
   }
 
-  function toggleDone(n: Note) {
+  // 完了は DB の complete_task で行う（繰り返しタスクは期日が次の回へ進む）
+  async function toggleDone(n: Note) {
     const done = !n.done_at;
-    patch(n.id, { is_task: true, done_at: done ? new Date().toISOString() : null });
-    if (done) flash({ text: `完了: ${headline(n)}`, undo: () => patch(n.id, { done_at: null }) });
+    const before = { done_at: n.done_at, due_date: n.due_date, scheduled_date: n.scheduled_date, last_done_at: n.last_done_at, done_count: n.done_count };
+    if (!n.is_task) await supabase.from("notes").update({ is_task: true }).eq("id", n.id);
+    if (!n.repeat_rule) setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, is_task: true, done_at: done ? new Date().toISOString() : null } : x)));
+    const { data, error } = await supabase.rpc("complete_task", { p_id: n.id, p_done: done });
+    if (error) {
+      flash({ text: `保存できませんでした: ${error.message}` });
+      return load();
+    }
+    const after = data as Note;
+    setNotes((ns) => ns.map((x) => (x.id === n.id ? after : x)));
+    if (!done) return;
+    if (n.repeat_rule) {
+      const next = after.due_date ?? after.scheduled_date;
+      flash({ text: `完了: ${headline(n)} → 次は ${next ? formatDay(next) : "未定"}`, undo: () => patch(n.id, before) });
+    } else flash({ text: `完了: ${headline(n)}`, undo: () => patch(n.id, { done_at: null }) });
   }
 
   function trash(n: Note) {
@@ -308,6 +350,8 @@ function Notes({ session }: { session: Session }) {
             {isList && (
               <NoteList
                 notes={shown}
+                events={wantsCalendar && !query.trim() ? events : []}
+                eventsMode={view.kind === "today" ? "today" : "upcoming"}
                 grouped={view.kind === "upcoming" && !query.trim()}
                 links={links}
                 cursor={cursor}
@@ -319,7 +363,10 @@ function Notes({ session }: { session: Session }) {
                 onToggle={toggleDone}
               />
             )}
-            {shown.length === 0 && <p className="empty">{emptyText(view, !!query.trim())}</p>}
+            {wantsCalendar && calError && !query.trim() && <p className="error small">カレンダー: {calError}</p>}
+            {shown.length === 0 && !(wantsCalendar && events.length) && (
+              <p className="empty">{emptyText(view, !!query.trim())}</p>
+            )}
             {canShowDone && (
               <button className="link-button" onClick={() => setShowDone((s) => !s)}>
                 {showDone ? "未完了を表示" : "完了したものを表示"}
@@ -499,6 +546,8 @@ function QuickAdd({
 
 function NoteList({
   notes,
+  events,
+  eventsMode,
   grouped,
   links,
   cursor,
@@ -507,6 +556,8 @@ function NoteList({
   onToggle,
 }: {
   notes: Note[];
+  events: CalendarEvent[];
+  eventsMode: "today" | "upcoming";
   grouped: boolean;
   links: ExternalLink[];
   cursor: number;
@@ -515,70 +566,138 @@ function NoteList({
   onToggle: (n: Note) => void;
 }) {
   const today = jstDate();
-  let lastGroup = "";
+  const row = (n: Note, i: number) => {
+    const sent = links.filter((l) => l.note_id === n.id);
+    const rule = asRule(n.repeat_rule);
+    return (
+      <li
+        key={n.id}
+        className={`row ${i === cursor ? "cursor" : ""} ${selectedId === n.id ? "selected" : ""} ${n.done_at ? "done" : ""}`}
+        onClick={() => onOpen(n, i)}
+      >
+        {n.is_task ? (
+          <button
+            className={`check p${n.priority}`}
+            aria-label={n.done_at ? "未完了に戻す" : "完了にする"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(n);
+            }}
+          >
+            {n.done_at && <Check size={13} strokeWidth={3} />}
+          </button>
+        ) : (
+          <span className="dot">
+            {n.pinned ? (
+              <Pin size={14} strokeWidth={2} />
+            ) : n.source === "watch" ? (
+              <Watch size={14} strokeWidth={2} />
+            ) : (
+              <span className="bullet" />
+            )}
+          </span>
+        )}
+        <div className="row-main">
+          <div className="row-title">{headline(n)}</div>
+          <div className="row-meta">
+            {n.due_date && (
+              <span className={isOverdue(n, today) ? "overdue" : n.due_date === today ? "due-today" : ""}>
+                締切 {formatDay(n.due_date, today)}
+                {n.due_time && ` ${n.due_time.slice(0, 5)}`}
+              </span>
+            )}
+            {n.scheduled_date && !grouped && n.scheduled_date !== n.due_date && (
+              <span>予定 {formatDay(n.scheduled_date, today)}</span>
+            )}
+            {rule && (
+              <span className="repeat">
+                <Repeat size={11} strokeWidth={2.25} />
+                {describeRepeat(rule, n.repeat_from)}
+              </span>
+            )}
+            {n.tags.map((t) => (
+              <span key={t} className="tag">
+                #{t}
+              </span>
+            ))}
+            {sent.some((l) => l.status === "error") && <span className="overdue">送信失敗</span>}
+            {sent.some((l) => l.status === "ok" && l.type === "calendar") && <span>→カレンダー</span>}
+            {!n.is_task && <span className="time">{formatDate(n.created_at)}</span>}
+          </div>
+        </div>
+      </li>
+    );
+  };
+
+  const eventsOn = (d: string) => events.filter((e) => e.date <= d && d <= e.end_date);
+
+  if (!grouped) {
+    const todays = eventsMode === "today" ? eventsOn(today) : [];
+    return (
+      <>
+        {todays.length > 0 && (
+          <ul className="list events">
+            <li className="group-head">カレンダー</li>
+            {todays.map((e) => (
+              <EventRow key={`${e.calendar}:${e.id}`} e={e} />
+            ))}
+          </ul>
+        )}
+        {todays.length > 0 && notes.length > 0 && <div className="group-head list-sep">タスク</div>}
+        <ul className="list">{notes.map((n, i) => row(n, i))}</ul>
+      </>
+    );
+  }
+
+  // 今後の予定: タスクとカレンダーの予定を日付ごとにまとめる（予定が先、タスクが後）
+  const days = new Set<string>();
+  notes.forEach((n) => days.add(nextDate(n) ?? ""));
+  for (const e of events) {
+    // 複数日の予定は、明日以降に入っている最初の日にだけ出す
+    const d = e.date > today ? e.date : e.end_date > today ? jstDate(1) : null;
+    if (d) days.add(d);
+  }
+  const order = [...days].sort((a, b) => (a || "9999").localeCompare(b || "9999"));
   return (
     <ul className="list">
-      {notes.map((n, i) => {
-        const group = grouped ? (nextDate(n) ?? "") : "";
-        const head = grouped && group !== lastGroup ? ((lastGroup = group), formatDay(group)) : null;
-        const sent = links.filter((l) => l.note_id === n.id);
-        return (
-          <Fragment key={n.id}>
-            {head && <li className="group-head">{head}</li>}
-            <li
-              className={`row ${i === cursor ? "cursor" : ""} ${selectedId === n.id ? "selected" : ""} ${n.done_at ? "done" : ""}`}
-              onClick={() => onOpen(n, i)}
-            >
-              {n.is_task ? (
-                <button
-                  className={`check p${n.priority}`}
-                  aria-label={n.done_at ? "未完了に戻す" : "完了にする"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggle(n);
-                  }}
-                >
-                  {n.done_at && <Check size={13} strokeWidth={3} />}
-                </button>
-              ) : (
-                <span className="dot">
-                  {n.pinned ? (
-                    <Pin size={14} strokeWidth={2} />
-                  ) : n.source === "watch" ? (
-                    <Watch size={14} strokeWidth={2} />
-                  ) : (
-                    <span className="bullet" />
-                  )}
-                </span>
-              )}
-              <div className="row-main">
-                <div className="row-title">{headline(n)}</div>
-                <div className="row-meta">
-                  {n.due_date && (
-                    <span className={isOverdue(n, today) ? "overdue" : n.due_date === today ? "due-today" : ""}>
-                      締切 {formatDay(n.due_date, today)}
-                      {n.due_time && ` ${n.due_time.slice(0, 5)}`}
-                    </span>
-                  )}
-                  {n.scheduled_date && !grouped && n.scheduled_date !== n.due_date && (
-                    <span>予定 {formatDay(n.scheduled_date, today)}</span>
-                  )}
-                  {n.tags.map((t) => (
-                    <span key={t} className="tag">
-                      #{t}
-                    </span>
-                  ))}
-                  {sent.some((l) => l.status === "error") && <span className="overdue">送信失敗</span>}
-                  {sent.some((l) => l.status === "ok" && l.type === "todoist") && <span>→Todoist</span>}
-                  {sent.some((l) => l.status === "ok" && l.type === "calendar") && <span>→カレンダー</span>}
-                  {!n.is_task && <span className="time">{formatDate(n.created_at)}</span>}
-                </div>
-              </div>
-            </li>
-          </Fragment>
-        );
-      })}
+      {order.map((d) => (
+        <Fragment key={d || "none"}>
+          <li className="group-head">{d ? formatDay(d) : "日付なし"}</li>
+          {events
+            .filter((e) => (e.date > today ? e.date : jstDate(1)) === d && e.end_date >= d)
+            .map((e) => (
+              <EventRow key={`${e.calendar}:${e.id}`} e={e} />
+            ))}
+          {notes.map((n, i) => ((nextDate(n) ?? "") === d ? row(n, i) : null))}
+        </Fragment>
+      ))}
     </ul>
+  );
+}
+
+function EventRow({ e }: { e: CalendarEvent }) {
+  const when = e.all_day
+    ? e.end_date !== e.date
+      ? `終日（〜${formatDay(e.end_date)}）`
+      : "終日"
+    : `${e.start_time}〜${e.end_time}`;
+  return (
+    <li className="row event" onClick={() => e.url && window.open(e.url, "_blank", "noreferrer")}>
+      <span className="event-bar" style={{ background: e.color ?? "#8ab4f8" }} />
+      <div className="row-main">
+        <div className="row-title">{e.title}</div>
+        <div className="row-meta">
+          <span className="event-time">{when}</span>
+          {e.location && (
+            <span className="event-loc">
+              <MapPin size={11} strokeWidth={2.25} />
+              {e.location.split(/[\s,、]/)[0]}
+            </span>
+          )}
+          <span>{e.calendar}</span>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -700,7 +819,9 @@ function Detail({
             type="checkbox"
             checked={note.is_task}
             disabled={trashed}
-            onChange={(e) => onPatch(e.target.checked ? { is_task: true } : { is_task: false, done_at: null })}
+            onChange={(e) =>
+              onPatch(e.target.checked ? { is_task: true } : { is_task: false, done_at: null, repeat_rule: null })
+            }
           />
         </label>
         {note.is_task && (
@@ -737,6 +858,7 @@ function Detail({
                 明日
               </button>
             </label>
+            <RepeatEditor note={note} disabled={trashed} onPatch={onPatch} />
             <div className="prop">
               <span>優先度</span>
               <div className="seg">
@@ -767,8 +889,121 @@ function Detail({
             : "作成"}{" "}
         {formatDate(note.created_at)}
         {note.done_at && ` ・ 完了 ${formatDate(note.done_at)}`}
+        {note.repeat_rule && note.last_done_at && ` ・ 前回の完了 ${formatDate(note.last_done_at)}（${note.done_count}回目）`}
       </p>
     </aside>
+  );
+}
+
+const REPEAT_PRESETS = ["毎日", "平日", "毎週", "毎月", "毎年"];
+
+function RepeatEditor({
+  note,
+  disabled,
+  onPatch,
+}: {
+  note: Note;
+  disabled: boolean;
+  onPatch: (f: Partial<Note>) => void;
+}) {
+  const rule = asRule(note.repeat_rule);
+  const [text, setText] = useState(rule ? describeRepeat(rule) : "");
+  const [err, setErr] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  // 「毎週」「毎月」だけなら、いまの期日の曜日・日にちに合わせる
+  function fit(r: NonNullable<ReturnType<typeof asRule>>) {
+    const base = note.due_date ?? note.scheduled_date ?? jstDate();
+    const d = new Date(`${base}T00:00:00Z`);
+    if (r.freq === "week" && !r.weekdays && r.interval === 1) r.weekdays = [d.getUTCDay()];
+    if (r.freq === "month" && r.monthday === undefined) r.monthday = d.getUTCDate();
+    if (r.freq === "year" && r.month === undefined) Object.assign(r, { month: d.getUTCMonth() + 1, monthday: d.getUTCDate() });
+    return r;
+  }
+  function apply(v: string) {
+    setErr("");
+    if (!v.trim()) {
+      setText("");
+      return onPatch({ repeat_rule: null });
+    }
+    const p = parseRepeat(v);
+    if (!p || p.rest) {
+      setErr("読み取れませんでした（例: 毎月1日 / 3週間ごと / 毎週火・金 / 42日ごと）");
+      return;
+    }
+    const r = fit(p.rule);
+    setText(describeRepeat(r));
+    const f: Partial<Note> = { repeat_rule: r, ...(p.from ? { repeat_from: p.from } : {}) };
+    // 繰り返しには期日が要る。なければ今日にする
+    if (!note.due_date && !note.scheduled_date) f.due_date = jstDate();
+    onPatch(f);
+    setEditing(false);
+  }
+
+  return (
+    <>
+      <div className="prop repeat-prop">
+        <span>繰り返し</span>
+        <div className="repeat-edit">
+          {!editing && !rule ? (
+            <div className="chips">
+              {REPEAT_PRESETS.map((p) => (
+                <button key={p} className="mini" disabled={disabled} onClick={() => apply(p)}>
+                  {p}
+                </button>
+              ))}
+              <button className="mini" disabled={disabled} onClick={() => setEditing(true)}>
+                その他…
+              </button>
+            </div>
+          ) : (
+            <input
+              value={text}
+              disabled={disabled}
+              placeholder="例: 3週間ごと / 毎月10日 / 毎週火・金"
+              autoFocus={editing}
+              onFocus={() => setEditing(true)}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  apply(text);
+                }
+              }}
+              onBlur={() => (text !== (rule ? describeRepeat(rule) : "") ? apply(text) : setEditing(false))}
+            />
+          )}
+          {rule && !editing && (
+            <button className="mini" disabled={disabled} onClick={() => apply("")}>
+              やめる
+            </button>
+          )}
+        </div>
+      </div>
+      {err && <p className="error small prop-error">{err}</p>}
+      {rule && (
+        <div className="prop">
+          <span>次の回は</span>
+          <div className="seg">
+            {(
+              [
+                ["due", "期日から数える"],
+                ["done", "完了日から数える"],
+              ] as const
+            ).map(([k, l]) => (
+              <button
+                key={k}
+                className={note.repeat_from === k ? "active" : ""}
+                disabled={disabled}
+                onClick={() => onPatch({ repeat_from: k })}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -853,14 +1088,14 @@ function LinkList({ links }: { links: ExternalLink[] }) {
 }
 
 function SendPanel({ note, text }: { note: Note; text: string }) {
-  const [target, setTarget] = useState<"todoist" | "calendar" | null>(null);
+  const [target, setTarget] = useState<"calendar" | null>(null);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
-  async function open(t: "todoist" | "calendar") {
+  async function open(t: "calendar") {
     setTarget(t);
     setMsg("");
     const firstLine = text.split("\n")[0].slice(0, 200);
@@ -892,7 +1127,6 @@ function SendPanel({ note, text }: { note: Note; text: string }) {
     return (
       <div className="actions send">
         <span className="send-label">送る</span>
-        <button onClick={() => open("todoist")}>Todoist へ</button>
         <button onClick={() => open("calendar")}>カレンダーへ</button>
       </div>
     );
@@ -905,18 +1139,12 @@ function SendPanel({ note, text }: { note: Note; text: string }) {
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
       </div>
       <p className="hint">
-        {target === "calendar"
-          ? time
-            ? "1時間の予定として入れます"
-            : "時刻が空なら終日の予定です"
-          : date
-            ? "期限付きのタスクにします"
-            : "期限なしのタスクにします"}
+        {time ? "1時間の予定として入れます" : "時刻が空なら終日の予定です"}
       </p>
       {msg && <p className="error small">{msg}</p>}
       <div className="actions">
         <button onClick={() => setTarget(null)}>やめる</button>
-        <button className="primary" disabled={busy || !title.trim() || (target === "calendar" && !date)} onClick={send}>
+        <button className="primary" disabled={busy || !title.trim() || !date} onClick={send}>
           {busy ? "送信中…" : "送る"}
         </button>
       </div>
@@ -982,15 +1210,11 @@ function Settings() {
       )}
       {error && <p className="error small">{error}</p>}
       <section>
-        <h3>Todoist</h3>
-        <p>{status ? (status.todoist ? "✓ 使えます" : "未設定（サーバーにトークンを入れてください）") : "…"}</p>
-      </section>
-      <section>
         <h3>Google カレンダー</h3>
         {!status ? (
           <p>…</p>
         ) : !status.google.configured ? (
-          <p>未設定（サーバーに OAuth クライアントを入れてください）</p>
+          <p>未設定（サーバーに OAuth クライアントを入れてください）。つなぐと「今日」「今後の予定」にカレンダーの予定も並びます。</p>
         ) : status.google.connected ? (
           <>
             <p>✓ {status.google.account ?? "接続済み"}</p>
@@ -1010,9 +1234,9 @@ function Settings() {
       <section>
         <h3>ウォッチから送る</h3>
         <p>
-          メモの最初に「タスク」と言うとタスクになり（日時を言えば締め切り）、「予定」と言うとカレンダーへ自動で送ります。
+          メモの最初に「タスク」と言うとタスクになり（日時を言えば締め切り、「毎月1日」などを言えば繰り返し）、「予定」と言うとカレンダーへ自動で送ります。
           <br />
-          例:「タスク、明日 牛乳を買う」「予定、明日15時 歯医者」
+          例:「タスク、明日 牛乳を買う」「タスク、毎月10日 積立の確認」「予定、明日15時 歯医者」
         </p>
       </section>
     </div>

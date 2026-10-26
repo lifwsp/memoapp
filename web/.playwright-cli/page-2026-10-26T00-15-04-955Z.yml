@@ -1,0 +1,90 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 15" [ref=e165] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e67]: "15"
+      - button "今日 1" [ref=e166] [cursor=pointer]:
+        - generic [ref=e17]: 今日
+        - generic [ref=e167]: "1"
+      - button [ref=e24] [cursor=pointer]
+      - button [active] [ref=e28] [cursor=pointer]
+      - button [ref=e35] [cursor=pointer]
+      - button [ref=e40] [cursor=pointer]
+      - button [ref=e45] [cursor=pointer]
+      - button [ref=e50] [cursor=pointer]
+  - main [ref=e55]:
+    - generic [ref=e56]:
+      - button "サイドバー（[）" [ref=e57] [cursor=pointer]
+      - heading "すべて" [level=1] [ref=e180]
+      - searchbox "検索（/）" [ref=e61]
+    - textbox "メモを追加（Enter・#タグ も書けます）" [ref=e181]
+    - list [ref=e68]:
+      - listitem [ref=e168] [cursor=pointer]:
+        - button "完了にする" [ref=e169]
+        - generic [ref=e170]:
+          - generic [ref=e171]: ZZ布団干し
+          - generic [ref=e172]:
+            - generic [ref=e173]: 締切 今日
+            - generic [ref=e174]: 3週間ごと（完了日から）
+      - listitem [ref=e182] [cursor=pointer]:
+        - button "完了にする" [ref=e183]
+        - generic [ref=e184]:
+          - generic [ref=e185]: ZZ積立の確認
+          - generic [ref=e186]:
+            - generic [ref=e187]: 締切 11/10(火)
+            - generic [ref=e188]: 毎月10日
+      - listitem [ref=e194] [cursor=pointer]:
+        - generic [ref=e197]:
+          - generic [ref=e198]: 三井住友カードリボ設定
+          - generic [ref=e199]: 10/25 23:14
+      - listitem [ref=e201] [cursor=pointer]:
+        - generic [ref=e204]:
+          - generic [ref=e205]: 布団カバー
+          - generic [ref=e206]: 10/25 23:14
+      - listitem [ref=e208] [cursor=pointer]:
+        - generic [ref=e211]:
+          - generic [ref=e212]: 布団カバー
+          - generic [ref=e213]: 10/25 23:14
+      - listitem [ref=e215] [cursor=pointer]:
+        - generic [ref=e218]:
+          - generic [ref=e219]: 誕生日おめでとう！
+          - generic [ref=e220]: 10/25 23:14
+      - listitem [ref=e222] [cursor=pointer]:
+        - generic [ref=e225]:
+          - generic [ref=e226]: 上野恩賜公園ウォークラリー
+          - generic [ref=e227]: 10/25 23:14
+      - listitem [ref=e229] [cursor=pointer]:
+        - generic [ref=e232]:
+          - generic [ref=e233]: 楽天ペイ
+          - generic [ref=e234]: 10/25 23:13
+      - listitem [ref=e236] [cursor=pointer]:
+        - generic [ref=e239]:
+          - generic [ref=e240]: 楽天カード
+          - generic [ref=e241]: 10/25 23:13
+      - listitem [ref=e243] [cursor=pointer]:
+        - generic [ref=e246]:
+          - generic [ref=e247]: 楽天/SBI/マネックス/カブコム積立投信売却
+          - generic [ref=e248]: 10/25 23:13
+      - listitem [ref=e250] [cursor=pointer]:
+        - generic [ref=e253]:
+          - generic [ref=e254]: 三井住友カードリボ設定
+          - generic [ref=e255]: 10/25 23:13
+      - listitem [ref=e257] [cursor=pointer]:
+        - generic [ref=e260]:
+          - generic [ref=e261]: 東京都事業継承引き継ぎ支援センター
+          - generic [ref=e262]: 10/25 23:13
+      - listitem [ref=e264] [cursor=pointer]:
+        - generic [ref=e267]:
+          - generic [ref=e268]: SBI新生銀行キャンペーンエントリー
+          - generic [ref=e269]: 10/25 23:13
+      - listitem [ref=e271] [cursor=pointer]:
+        - generic [ref=e274]:
+          - generic [ref=e275]: 結：ピラティス
+          - generic [ref=e276]: 10/25 23:13
+      - listitem [ref=e278] [cursor=pointer]:
+        - generic [ref=e281]:
+          - generic [ref=e282]: 結：劇団四季リトルマーメイド舞浜
+          - generic [ref=e283]: 10/25 23:13
+    - button "完了したものを表示" [ref=e163] [cursor=pointer]

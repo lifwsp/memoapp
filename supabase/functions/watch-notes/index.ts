@@ -2,10 +2,11 @@
 // ウォッチ（Zepp Side Service）からのメモ受け口。
 // 認証: Authorization: Bearer <WATCH_TOKEN>（自分専用の長いランダム文字列）
 // 環境変数: WATCH_TOKEN, OWNER_USER_ID（+ Supabase が自動で入れる URL / SERVICE_ROLE_KEY）
-// 先頭の言葉で振り分け: 「タスク、…」→ WristMemo のタスク（日時があれば締め切り）、「予定、明日15時 …」→ Google カレンダー。メモ自体は必ず残す。
+// 先頭の言葉で振り分け: 「タスク、…」→ WristMemo のタスク（日時があれば締め切り、「毎月1日」などは繰り返し）、「予定、明日15時 …」→ Google カレンダー。メモ自体は必ず残す。
 // デプロイ: supabase functions deploy watch-notes --no-verify-jwt
 import { admin, json, OWNER_USER_ID, sendNote, timingSafeEqual } from "../_shared/integrations.ts";
 import { parseWhen, routeByPrefix } from "../_shared/jpdate.ts";
+import { taskFromText } from "../_shared/repeat.ts";
 
 const WATCH_TOKEN = Deno.env.get("WATCH_TOKEN") ?? "";
 
@@ -47,18 +48,8 @@ Deno.serve(async (req) => {
   // 再送（重複）のときは inserted が空になるので、二重に送らない
   const noteId = inserted?.[0]?.id as string | undefined;
   const route = routeByPrefix(body);
-  if (noteId && route?.target === "todoist") {
-    // タスクはこのアプリで持つ（Muse から扱えるように）。Todoist へはメモ画面や Muse から必要なときだけ送る
-    const when = parseWhen(route.text);
-    await sb
-      .from("notes")
-      .update({
-        is_task: true,
-        title: (when?.rest || route.text).slice(0, 200),
-        due_date: when?.date ?? null,
-        due_time: when?.time ?? null,
-      })
-      .eq("id", noteId);
+  if (noteId && route?.target === "task") {
+    await sb.from("notes").update({ is_task: true, ...taskFromText(route.text) }).eq("id", noteId);
     return json(200, { ok: true, routed: "task" });
   }
   if (noteId && route?.target === "calendar") {

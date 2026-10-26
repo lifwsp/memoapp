@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { authStorage, requestPersistentStorage } from "./authStorage";
+import type { RepeatFrom, RepeatRule } from "./repeat";
 
 const url = import.meta.env.VITE_SUPABASE_URL as string;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -26,6 +27,10 @@ export type Note = {
   due_time: string | null; // HH:MM:SS
   scheduled_date: string | null;
   priority: number; // 0 なし / 1 低 / 2 中 / 3 高
+  repeat_rule: RepeatRule | null; // 繰り返し（null = 1回きり）
+  repeat_from: RepeatFrom; // 次の回を期日から数えるか、完了日から数えるか
+  last_done_at: string | null;
+  done_count: number;
   created_at: string;
   updated_at: string;
 };
@@ -33,7 +38,7 @@ export type Note = {
 export type ExternalLink = {
   id: string;
   note_id: string;
-  type: "todoist" | "calendar";
+  type: "todoist" | "calendar"; // todoist は以前の送信記録だけ
   status: "ok" | "error";
   url: string | null;
   title: string | null;

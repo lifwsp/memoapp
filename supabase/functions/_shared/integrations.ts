@@ -1,9 +1,9 @@
-// Todoist / Google カレンダーへ送る処理（watch-notes・integrations・mcp から共通で使う）
+// Google カレンダーとの連携（watch-notes・integrations・mcp から共通で使う）
+// 予定の本体はカレンダーに置く。WristMemo は予定を「書き込む」ことと「読んで並べる」ことだけをする。
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { parseWhen } from "./jpdate.ts";
 
 export const OWNER_USER_ID = Deno.env.get("OWNER_USER_ID") ?? "";
-const TODOIST_TOKEN = Deno.env.get("TODOIST_TOKEN") ?? "";
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID") ?? "";
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET") ?? "";
 const GOOGLE_CALENDAR_ID = Deno.env.get("GOOGLE_CALENDAR_ID") ?? "primary";
@@ -16,7 +16,7 @@ export function admin(): SupabaseClient {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 }
 
-export type Target = "todoist" | "calendar";
+export type Target = "calendar";
 export type SendInput = {
   noteId: string;
   target: Target;
@@ -41,21 +41,6 @@ function resolve(input: SendInput) {
 function jstToIso(date: string, time: string, addMin = 0) {
   const t = new Date(`${date}T${time}:00+09:00`).getTime() + addMin * 60_000;
   return new Date(t).toISOString();
-}
-
-async function sendTodoist(title: string, date: string | null, time: string | null, description: string) {
-  if (!TODOIST_TOKEN) throw new Error("Todoist のトークンが未設定です");
-  const body: Record<string, unknown> = { content: title, description };
-  if (date && time) body.due_datetime = jstToIso(date, time);
-  else if (date) body.due_date = date;
-  const res = await fetch("https://api.todoist.com/api/v1/tasks", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${TODOIST_TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Todoist ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const task = await res.json();
-  return { id: String(task.id), url: `https://app.todoist.com/app/task/${task.id}` };
 }
 
 export async function googleAccessToken(sb: SupabaseClient): Promise<string> {
@@ -127,11 +112,8 @@ export async function sendNote(sb: SupabaseClient, input: SendInput): Promise<Se
   try {
     if (!title) throw new Error("タイトルが空です");
     let out: { id: string; url: string | null };
-    if (input.target === "todoist") out = await sendTodoist(title, date, time, description);
-    else {
-      if (!date) throw new Error("日付が読み取れませんでした（例: 明日15時 歯医者）");
-      out = await sendCalendar(sb, title, date, time, input.durationMin ?? 60, description);
-    }
+    if (!date) throw new Error("日付が読み取れませんでした（例: 明日15時 歯医者）");
+    out = await sendCalendar(sb, title, date, time, input.durationMin ?? 60, description);
     await sb.from("external_links").insert({
       note_id: input.noteId,
       user_id: OWNER_USER_ID,
@@ -163,15 +145,13 @@ export async function sendNote(sb: SupabaseClient, input: SendInput): Promise<Se
 export function googleConfigured() {
   return !!(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
 }
-export function todoistConfigured() {
-  return !!TODOIST_TOKEN;
-}
 export function googleAuthUrl(state: string) {
   const q = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: GOOGLE_REDIRECT_URI,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/calendar.events openid email",
+    // 予定の書き込み（calendar.events）と、家族カレンダーなどを含む全カレンダーの読み取り（calendar.readonly）
+    scope: "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly openid email",
     access_type: "offline",
     prompt: "consent",
     state,
@@ -205,6 +185,99 @@ export async function googleExchange(code: string) {
     expires_in: number;
     account: string | null;
   };
+}
+
+// ---------- カレンダーを読む（合流ビュー用） ----------
+
+export type CalendarEvent = {
+  id: string;
+  calendar: string; // カレンダーの名前
+  color: string | null;
+  title: string;
+  date: string; // 開始日 YYYY-MM-DD（日本時間）
+  end_date: string; // 終了日（終日の予定は最終日。1日だけなら date と同じ）
+  start_time: string | null; // HH:MM（終日なら null）
+  end_time: string | null;
+  all_day: boolean;
+  location: string | null;
+  url: string | null;
+};
+
+const jstDate = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(0, 10);
+const jstTime = (iso: string) => new Date(new Date(iso).getTime() + 9 * 3600_000).toISOString().slice(11, 16);
+const dayBefore = (d: string) => {
+  const t = new Date(`${d}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - 1);
+  return t.toISOString().slice(0, 10);
+};
+
+let calCache: { at: number; list: { id: string; name: string; color: string | null }[] } | null = null;
+
+
+type Cal = { id: string; name: string; color: string | null };
+async function calendars(token: string): Promise<Cal[]> {
+  if (calCache && Date.now() - calCache.at < 10 * 60_000) return calCache.list;
+  const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("カレンダーを読む権限がありません（設定から Google を接続し直してください）");
+    throw new Error(`Google カレンダー一覧 ${res.status}`);
+  }
+  const data = await res.json();
+  const list = (data.items ?? [])
+    // 表示をオフにしているカレンダーと、祝日などの購読カレンダーの一部はそのまま出す（selected で絞る）
+    .filter((c: { selected?: boolean; hidden?: boolean }) => c.selected !== false && !c.hidden)
+    .map((c: { id: string; summaryOverride?: string; summary?: string; backgroundColor?: string }) => ({
+      id: c.id,
+      name: c.summaryOverride ?? c.summary ?? c.id,
+      color: c.backgroundColor ?? null,
+    }));
+  calCache = { at: Date.now(), list };
+  return list;
+}
+
+/** from〜to（両端を含む、日本時間の日付）の予定をすべてのカレンダーから読む。繰り返し予定は1回ずつに展開される */
+export async function listCalendarEvents(sb: SupabaseClient, from: string, to: string): Promise<CalendarEvent[]> {
+  const token = await googleAccessToken(sb);
+  const cals = await calendars(token);
+  const timeMin = new Date(`${from}T00:00:00+09:00`).toISOString();
+  const timeMax = new Date(new Date(`${to}T00:00:00+09:00`).getTime() + 86400_000).toISOString();
+  const out: CalendarEvent[] = [];
+  await Promise.all(
+    cals.map(async (c) => {
+      const q = new URLSearchParams({ timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "250" });
+      const res = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?${q}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return; // 読めないカレンダーは飛ばす
+      const data = await res.json();
+      for (const e of data.items ?? []) {
+        if (e.status === "cancelled") continue;
+        const allDay = !!e.start?.date;
+        out.push({
+          id: e.id,
+          calendar: c.name,
+          color: c.color,
+          title: e.summary ?? "（タイトルなし）",
+          date: allDay ? e.start.date : jstDate(e.start.dateTime),
+          end_date: allDay ? dayBefore(e.end.date) : jstDate(e.end.dateTime),
+          start_time: allDay ? null : jstTime(e.start.dateTime),
+          end_time: allDay ? null : jstTime(e.end.dateTime),
+          all_day: allDay,
+          location: e.location ?? null,
+          url: e.htmlLink ?? null,
+        });
+      }
+    }),
+  );
+  return out.sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
+}
+
+export async function googleConnected(sb: SupabaseClient) {
+  const { data } = await sb.from("integration_tokens").select("provider").eq("provider", "google").maybeSingle();
+  return !!data;
 }
 
 export const cors = {
