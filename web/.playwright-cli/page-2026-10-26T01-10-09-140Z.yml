@@ -1,0 +1,301 @@
+- generic [ref=e7]:
+  - complementary [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: WristMemo
+      - button "受信箱 39" [ref=e58] [cursor=pointer]:
+        - generic [ref=e12]: 受信箱
+        - generic [ref=e59]: "39"
+      - button "予定 5" [active] [ref=e60] [cursor=pointer]:
+        - generic [ref=e17]: 予定
+        - generic [ref=e61]: "5"
+      - button [ref=e20] [cursor=pointer]
+      - generic [ref=e62]: タグ
+      - button "ほん 83" [ref=e63] [cursor=pointer]:
+        - generic [ref=e64]: ほん
+        - generic [ref=e68]: "83"
+      - button "覚え書き 52" [ref=e69] [cursor=pointer]:
+        - generic [ref=e70]: 覚え書き
+        - generic [ref=e74]: "52"
+      - button "物欲 34" [ref=e75] [cursor=pointer]:
+        - generic [ref=e76]: 物欲
+        - generic [ref=e80]: "34"
+      - button "サントラ 26" [ref=e81] [cursor=pointer]:
+        - generic [ref=e82]: サントラ
+        - generic [ref=e86]: "26"
+      - button "事業アイデア 15" [ref=e87] [cursor=pointer]:
+        - generic [ref=e88]: 事業アイデア
+        - generic [ref=e92]: "15"
+      - button [ref=e27] [cursor=pointer]
+      - button [ref=e32] [cursor=pointer]
+      - button [ref=e37] [cursor=pointer]
+      - button [ref=e42] [cursor=pointer]
+  - main [ref=e47]:
+    - generic [ref=e48]:
+      - button "サイドバー（[）" [ref=e49] [cursor=pointer]
+      - heading "予定" [level=1] [ref=e420]
+      - searchbox "検索（/）" [ref=e53]
+    - textbox "タスクを追加（「明日15時 歯医者」「毎月10日 積立」も可・日付なしは今日）" [ref=e421]
+    - list [ref=e93]:
+      - listitem [ref=e422]: 期限切れ
+      - listitem [ref=e423] [cursor=pointer]:
+        - button "完了にする" [ref=e424]
+        - generic [ref=e425]:
+          - generic [ref=e426]: 楽天カード
+          - generic [ref=e427]:
+            - generic [ref=e428]: 締切 10/5(月)
+            - generic [ref=e429]: 毎月5日
+      - listitem [ref=e435] [cursor=pointer]:
+        - button "完了にする" [ref=e436]
+        - generic [ref=e437]:
+          - generic [ref=e438]: 楽天ペイ
+          - generic [ref=e439]:
+            - generic [ref=e440]: 締切 10/5(月)
+            - generic [ref=e441]: 毎月5日
+      - listitem [ref=e447] [cursor=pointer]:
+        - button "完了にする" [ref=e448]
+        - generic [ref=e449]:
+          - generic [ref=e450]: SBI
+          - generic [ref=e451]:
+            - generic [ref=e452]: 締切 10/5(月)
+            - generic [ref=e453]: 毎月5日
+      - listitem [ref=e459] [cursor=pointer]:
+        - button "完了にする" [ref=e460]
+        - generic [ref=e461]:
+          - generic [ref=e462]: 楽天/SBI/マネックス/カブコム積立投信売却
+          - generic [ref=e463]:
+            - generic [ref=e464]: 締切 10/10(土)
+            - generic [ref=e465]: 毎月10日
+      - listitem [ref=e471] [cursor=pointer]:
+        - button "完了にする" [ref=e472]
+        - generic [ref=e473]:
+          - generic [ref=e474]: カブコム
+          - generic [ref=e475]:
+            - generic [ref=e476]: 締切 10/11(日)
+            - generic [ref=e477]: 毎月11日
+      - listitem [ref=e483]: 今日
+      - listitem [ref=e484]: 今日の予定・タスクはありません
+      - listitem [ref=e485]: 明日
+      - listitem [ref=e486] [cursor=pointer]:
+        - button "完了にする" [ref=e487]
+        - generic [ref=e488]:
+          - generic [ref=e489]: 爪
+          - generic [ref=e490]:
+            - generic [ref=e491]: 締切 明日
+            - generic [ref=e492]: 4日ごと
+      - listitem [ref=e498] [cursor=pointer]:
+        - button "完了にする" [ref=e499]
+        - generic [ref=e500]:
+          - generic [ref=e501]: 歯医者
+          - generic [ref=e502]:
+            - generic [ref=e503]: 締切 明日
+            - generic [ref=e504]: 6か月ごと 15日
+      - listitem [ref=e510]: 10/29(木)
+      - listitem [ref=e511] [cursor=pointer]:
+        - button "完了にする" [ref=e512]
+        - generic [ref=e513]:
+          - generic [ref=e514]: 布団カバー
+          - generic [ref=e515]:
+            - generic [ref=e516]: 締切 10/29(木)
+            - generic [ref=e517]: 3週間ごと
+      - listitem [ref=e523] [cursor=pointer]:
+        - button "完了にする" [ref=e524]
+        - generic [ref=e525]:
+          - generic [ref=e526]: KitOisix｜有機野菜などの安全食材宅配 Oisix（おいしっくす）
+          - generic [ref=e527]:
+            - generic [ref=e528]: 締切 10/29(木) 18:00
+            - generic [ref=e529]: 隔週
+      - listitem [ref=e535]: 10/30(金)
+      - listitem [ref=e536] [cursor=pointer]:
+        - generic [ref=e538]:
+          - generic [ref=e539]: 結：劇団四季リトルマーメイド舞浜
+          - generic [ref=e540]:
+            - generic [ref=e541]: 12:30〜18:30
+            - generic [ref=e542]: ファミリー カレンダー
+      - listitem [ref=e543]: 10/31(土)
+      - listitem [ref=e544] [cursor=pointer]:
+        - generic [ref=e546]:
+          - generic [ref=e547]: 結：ピラティス
+          - generic [ref=e548]:
+            - generic [ref=e549]: 12:00〜13:30
+            - generic [ref=e550]: ファミリー カレンダー
+      - listitem [ref=e551]: 11/1(日)
+      - listitem [ref=e552] [cursor=pointer]:
+        - generic [ref=e554]:
+          - generic [ref=e555]: SBI新生銀行キャンペーンエントリー
+          - generic [ref=e556]:
+            - generic [ref=e557]: 終日
+            - generic [ref=e558]: lifwsp@gmail.com
+      - listitem [ref=e559] [cursor=pointer]:
+        - button "完了にする" [ref=e560]
+        - generic [ref=e561]:
+          - generic [ref=e562]: KitOisix｜有機野菜などの安全食材宅配 Oisix（おいしっくす）
+          - generic [ref=e563]:
+            - generic [ref=e564]: 締切 11/1(日)
+            - generic [ref=e565]: 隔週日曜
+      - listitem [ref=e571] [cursor=pointer]:
+        - button "完了にする" [ref=e572]
+        - generic [ref=e573]:
+          - generic [ref=e574]: SBI新生銀行キャンペーンエントリー
+          - generic [ref=e575]:
+            - generic [ref=e576]: 締切 11/1(日)
+            - generic [ref=e577]: 毎月1日
+      - listitem [ref=e583]: 11/3(火)
+      - listitem [ref=e584] [cursor=pointer]:
+        - generic [ref=e586]:
+          - generic [ref=e587]: 文化の日
+          - generic [ref=e588]:
+            - generic [ref=e589]: 終日
+            - generic [ref=e590]: 日本の祝日
+      - listitem [ref=e591]: 11/6(金)
+      - listitem [ref=e592] [cursor=pointer]:
+        - generic [ref=e594]:
+          - generic [ref=e595]: 東京都事業継承引き継ぎ支援センター
+          - generic [ref=e596]:
+            - generic [ref=e597]: 12:30〜15:30
+            - generic [ref=e598]: 東京都千代田区丸の内３－２－２
+            - generic [ref=e602]: lifwsp@gmail.com
+      - listitem [ref=e603]: 11/10(火)
+      - listitem [ref=e604] [cursor=pointer]:
+        - generic [ref=e606]:
+          - generic [ref=e607]: 三井住友カードリボ設定
+          - generic [ref=e608]:
+            - generic [ref=e609]: 終日
+            - generic [ref=e610]: lifwsp@gmail.com
+      - listitem [ref=e611] [cursor=pointer]:
+        - generic [ref=e613]:
+          - generic [ref=e614]: 楽天/SBI/マネックス/カブコム積立投信売却
+          - generic [ref=e615]:
+            - generic [ref=e616]: 終日
+            - generic [ref=e617]: lifwsp@gmail.com
+      - listitem [ref=e618] [cursor=pointer]:
+        - button "完了にする" [ref=e619]
+        - generic [ref=e620]:
+          - generic [ref=e621]: https://www.smbc-card.com/memx/revo/revo_link_index.html (三井住友カードリボ設定)
+          - generic [ref=e622]:
+            - generic [ref=e623]: 締切 11/10(火)
+            - generic [ref=e624]: 毎月10日
+      - listitem [ref=e630]: 11/11(水)
+      - listitem [ref=e631] [cursor=pointer]:
+        - generic [ref=e633]:
+          - generic [ref=e634]: 楽天カード
+          - generic [ref=e635]:
+            - generic [ref=e636]: 終日
+            - generic [ref=e637]: lifwsp@gmail.com
+      - listitem [ref=e638] [cursor=pointer]:
+        - generic [ref=e640]:
+          - generic [ref=e641]: 楽天ペイ
+          - generic [ref=e642]:
+            - generic [ref=e643]: 終日
+            - generic [ref=e644]: lifwsp@gmail.com
+      - listitem [ref=e645]: 11/14(土)
+      - listitem [ref=e646] [cursor=pointer]:
+        - generic [ref=e648]:
+          - generic [ref=e649]: 上野恩賜公園ウォークラリー
+          - generic [ref=e650]:
+            - generic [ref=e651]: 10:00〜13:00
+            - generic [ref=e652]: ファミリー カレンダー
+      - listitem [ref=e653]: 11/15(日)
+      - listitem [ref=e654] [cursor=pointer]:
+        - generic [ref=e656]:
+          - generic [ref=e657]: 七五三
+          - generic [ref=e658]:
+            - generic [ref=e659]: 終日
+            - generic [ref=e660]: 日本の祝日
+      - listitem [ref=e661] [cursor=pointer]:
+        - generic [ref=e663]:
+          - generic [ref=e664]: 誕生日おめでとう！
+          - generic [ref=e665]:
+            - generic [ref=e666]: 終日
+            - generic [ref=e667]: lifwsp@gmail.com
+      - listitem [ref=e668] [cursor=pointer]:
+        - generic [ref=e670]:
+          - generic [ref=e671]: 布団カバー
+          - generic [ref=e672]:
+            - generic [ref=e673]: 終日
+            - generic [ref=e674]: lifwsp@gmail.com
+      - listitem [ref=e675]: 11/16(月)
+      - listitem [ref=e676] [cursor=pointer]:
+        - button "完了にする" [ref=e677]
+        - generic [ref=e678]:
+          - generic [ref=e679]: マネックス
+          - generic [ref=e680]:
+            - generic [ref=e681]: 締切 11/16(月)
+            - generic [ref=e682]: 毎月16日
+      - listitem [ref=e688]: 11/23(月)
+      - listitem [ref=e689] [cursor=pointer]:
+        - generic [ref=e691]:
+          - generic [ref=e692]: 勤労感謝の日
+          - generic [ref=e693]:
+            - generic [ref=e694]: 終日
+            - generic [ref=e695]: 日本の祝日
+      - listitem [ref=e696]: 11/24(火)
+      - listitem [ref=e697] [cursor=pointer]:
+        - button "完了にする" [ref=e698]
+        - generic [ref=e699]:
+          - generic [ref=e700]: 美容院
+          - generic [ref=e701]:
+            - generic [ref=e702]: 締切 11/24(火)
+            - generic [ref=e703]: 42日ごと
+      - listitem [ref=e709]: 11/30(月)
+      - listitem [ref=e710] [cursor=pointer]:
+        - button "完了にする" [ref=e711]
+        - generic [ref=e712]:
+          - generic [ref=e713]: 無印でMUJIカードでなんか買う
+          - generic [ref=e714]:
+            - generic [ref=e715]: 締切 11/30(月)
+            - generic [ref=e716]: 毎年11月30日
+      - listitem [ref=e722]: 12/1(火)
+      - listitem [ref=e723] [cursor=pointer]:
+        - button "完了にする" [ref=e724]
+        - generic [ref=e725]:
+          - generic [ref=e726]: 無印500ポイント消費
+          - generic [ref=e727]:
+            - generic [ref=e728]: 締切 12/1(火)
+            - generic [ref=e729]: 12か月ごと 1日
+      - listitem [ref=e735]: 2027/2/9(火)
+      - listitem [ref=e736] [cursor=pointer]:
+        - button "完了にする" [ref=e737]
+        - generic [ref=e738]:
+          - generic [ref=e739]: ゆいさん誕生日1年毎
+          - generic [ref=e740]:
+            - generic [ref=e741]: 締切 2027/2/9(火)
+            - generic [ref=e742]: 毎年2月9日
+      - listitem [ref=e748]: 2027/3/1(月)
+      - listitem [ref=e749] [cursor=pointer]:
+        - button "完了にする" [ref=e750]
+        - generic [ref=e751]:
+          - generic [ref=e752]: シネマイレージカード決済100円
+          - generic [ref=e753]:
+            - generic [ref=e754]: 締切 2027/3/1(月)
+            - generic [ref=e755]: 12か月ごと 1日
+      - listitem [ref=e761]: 2027/4/2(金)
+      - listitem [ref=e762] [cursor=pointer]:
+        - button "完了にする" [ref=e763]
+        - generic [ref=e764]:
+          - generic [ref=e765]: 交際記念日 1年ごと
+          - generic [ref=e766]:
+            - generic [ref=e767]: 締切 2027/4/2(金)
+            - generic [ref=e768]: 毎年4月2日
+      - listitem [ref=e774]: 2027/5/1(土)
+      - listitem [ref=e775] [cursor=pointer]:
+        - button "完了にする" [ref=e776]
+        - generic [ref=e777]:
+          - generic [ref=e778]: 無印500ポイント消費
+          - generic [ref=e779]:
+            - generic [ref=e780]: 締切 2027/5/1(土)
+            - generic [ref=e781]: 12か月ごと 1日
+      - listitem [ref=e787]: 2027/6/2(水)
+      - listitem [ref=e788] [cursor=pointer]:
+        - button "完了にする" [ref=e789]
+        - generic [ref=e790]:
+          - generic [ref=e791]: 結婚記念日 1年毎
+          - generic [ref=e792]:
+            - generic [ref=e793]: 締切 2027/6/2(水)
+            - generic [ref=e794]: 毎年6月2日
+      - listitem [ref=e800]: 2042/6/21(土)
+      - listitem [ref=e801] [cursor=pointer]:
+        - button "完了にする" [ref=e802]
+        - generic [ref=e803]:
+          - generic [ref=e804]: 突発オフ
+          - generic [ref=e805]: 締切 2042/6/21(土) 15:00
+    - button "完了したものを表示" [ref=e807] [cursor=pointer]

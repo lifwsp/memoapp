@@ -16,7 +16,6 @@ import {
   Plus,
   Repeat,
   Settings2,
-  Sun,
   Trash2,
   Watch,
   X,
@@ -34,7 +33,8 @@ import {
   headline,
   isOverdue,
   jstDate,
-  nextDate,
+  dayOf,
+  isDueNow,
   searchNotes,
   VIEW_LABEL,
   viewKey,
@@ -155,7 +155,7 @@ function Notes({ session }: { session: Session }) {
   useEffect(() => localStorage.setItem("sidebar", sidebarOpen ? "1" : "0"), [sidebarOpen]);
 
   // 合流ビュー: 「今日」「今後の予定」では Google カレンダーの予定も読んで並べる（予定の本体はカレンダー）
-  const wantsCalendar = view.kind === "today" || view.kind === "upcoming";
+  const wantsCalendar = view.kind === "today";
   async function loadEvents() {
     try {
       const r = await api.events(jstDate(), jstDate(30));
@@ -181,7 +181,7 @@ function Notes({ session }: { session: Session }) {
   const counts = useMemo(
     () => ({
       inbox: filterNotes(notes, { kind: "inbox" }, false).length,
-      today: filterNotes(notes, { kind: "today" }, false).length,
+      today: filterNotes(notes, { kind: "today" }, false).filter((n) => isDueNow(n)).length,
     }),
     [notes],
   );
@@ -215,11 +215,11 @@ function Notes({ session }: { session: Session }) {
       source: "web",
       tags: view.kind === "tag" ? [...new Set([view.tag, ...t])] : t,
     };
-    if (view.kind === "today" || view.kind === "upcoming") {
+    if (view.kind === "today") {
       // 「毎月1日 カード支払い」「明日15時 電話」のような日時・繰り返しの言葉を読む
       const f = taskFromText(rest);
       Object.assign(row, { is_task: true, body: f.title, ...f });
-      if (!f.due_date) row.scheduled_date = jstDate(view.kind === "today" ? 0 : 1);
+      if (!f.due_date) row.scheduled_date = jstDate();
     }
     const { data, error } = await supabase.from("notes").insert(row).select().single();
     if (error) return flash({ text: `保存できませんでした: ${error.message}` });
@@ -351,8 +351,7 @@ function Notes({ session }: { session: Session }) {
               <NoteList
                 notes={shown}
                 events={wantsCalendar && !query.trim() ? events : []}
-                eventsMode={view.kind === "today" ? "today" : "upcoming"}
-                grouped={view.kind === "upcoming" && !query.trim()}
+                grouped={view.kind === "today" && !query.trim() && !showDone}
                 links={links}
                 cursor={cursor}
                 selectedId={selectedId}
@@ -391,11 +390,11 @@ function Notes({ session }: { session: Session }) {
       )}
 
       <nav className="tabbar">
-        {(["inbox", "today", "upcoming", "all"] as const).map((k) => (
+        {(["inbox", "today", "all"] as const).map((k) => (
           <button key={k} className={view.kind === k && !query ? "active" : ""} onClick={() => go({ kind: k })}>
             <TabIcon k={k} />
             {VIEW_LABEL[k]}
-            {k !== "all" && k !== "upcoming" && counts[k] > 0 && <span className="tab-count">{counts[k]}</span>}
+            {k !== "all" && counts[k] > 0 && <span className="tab-count">{counts[k]}</span>}
           </button>
         ))}
         <button className={drawer ? "active" : ""} onClick={() => setDrawer(true)}>
@@ -425,8 +424,7 @@ function Notes({ session }: { session: Session }) {
 
 const VIEW_ICON: Record<string, LucideIcon> = {
   inbox: Inbox,
-  today: Sun,
-  upcoming: CalendarDays,
+  today: CalendarDays,
   all: Layers,
   tag: Hash,
   archive: Archive,
@@ -445,9 +443,7 @@ function emptyText(view: View, searching: boolean) {
     case "inbox":
       return "受信箱は空です。タグを付けたメモはここから消えます。";
     case "today":
-      return "今日やることはありません";
-    case "upcoming":
-      return "予定の入ったタスクはありません";
+      return "日付の入ったタスクも予定もありません";
     case "trash":
       return "ゴミ箱は空です";
     default:
@@ -485,7 +481,6 @@ function Sidebar({
       <div className="brand">WristMemo</div>
       {item({ kind: "inbox" }, counts.inbox)}
       {item({ kind: "today" }, counts.today)}
-      {item({ kind: "upcoming" })}
       {item({ kind: "all" })}
       {tags.length > 0 && <div className="nav-head">タグ</div>}
       {tags.map(([t, n]) => item({ kind: "tag", tag: t }, n))}
@@ -515,10 +510,8 @@ function QuickAdd({
   const [text, setText] = useState("");
   const placeholder =
     view.kind === "today"
-      ? "今日やることを追加（Enter）"
-      : view.kind === "upcoming"
-        ? "明日以降のタスクを追加（Enter）"
-        : view.kind === "tag"
+      ? "タスクを追加（「明日15時 歯医者」「毎月10日 積立」も可・日付なしは今日）"
+      : view.kind === "tag"
           ? `#${view.tag} にメモを追加（Enter）`
           : "メモを追加（Enter・#タグ も書けます）";
   return (
@@ -547,7 +540,6 @@ function QuickAdd({
 function NoteList({
   notes,
   events,
-  eventsMode,
   grouped,
   links,
   cursor,
@@ -557,7 +549,6 @@ function NoteList({
 }: {
   notes: Note[];
   events: CalendarEvent[];
-  eventsMode: "today" | "upcoming";
   grouped: boolean;
   links: ExternalLink[];
   cursor: number;
@@ -629,48 +620,42 @@ function NoteList({
     );
   };
 
-  const eventsOn = (d: string) => events.filter((e) => e.date <= d && d <= e.end_date);
+  if (!grouped) return <ul className="list">{notes.map((n, i) => row(n, i))}</ul>;
 
-  if (!grouped) {
-    const todays = eventsMode === "today" ? eventsOn(today) : [];
-    return (
-      <>
-        {todays.length > 0 && (
-          <ul className="list events">
-            <li className="group-head">カレンダー</li>
-            {todays.map((e) => (
-              <EventRow key={`${e.calendar}:${e.id}`} e={e} />
-            ))}
-          </ul>
-        )}
-        {todays.length > 0 && notes.length > 0 && <div className="group-head list-sep">タスク</div>}
-        <ul className="list">{notes.map((n, i) => row(n, i))}</ul>
-      </>
-    );
-  }
-
-  // 今後の予定: タスクとカレンダーの予定を日付ごとにまとめる（予定が先、タスクが後）
-  const days = new Set<string>();
-  notes.forEach((n) => days.add(nextDate(n) ?? ""));
-  for (const e of events) {
-    // 複数日の予定は、明日以降に入っている最初の日にだけ出す
-    const d = e.date > today ? e.date : e.end_date > today ? jstDate(1) : null;
-    if (d) days.add(d);
-  }
-  const order = [...days].sort((a, b) => (a || "9999").localeCompare(b || "9999"));
+  // 期限切れ → 今日 → 明日以降を日付ごとに。各日はカレンダーの予定が先、タスクが後
+  const evDay = (e: CalendarEvent) => (e.date > today ? e.date : today); // 複数日の予定は今日以降の最初の日にだけ出す
+  const days = new Set<string>([today]);
+  notes.forEach((n) => days.add(dayOf(n, today) ?? ""));
+  events.forEach((e) => e.end_date >= today && days.add(evDay(e)));
+  const order = [...days].sort((x, y) => {
+    const k = (d: string) => (d === "overdue" ? "0" : d || "9999");
+    return k(x).localeCompare(k(y));
+  });
   return (
     <ul className="list">
-      {order.map((d) => (
-        <Fragment key={d || "none"}>
-          <li className="group-head">{d ? formatDay(d) : "日付なし"}</li>
-          {events
-            .filter((e) => (e.date > today ? e.date : jstDate(1)) === d && e.end_date >= d)
-            .map((e) => (
+      {order.map((d) => {
+        const evs = events.filter((e) => e.end_date >= today && evDay(e) === d);
+        const ts = notes.map((n, i) => ((dayOf(n, today) ?? "") === d ? row(n, i) : null)).filter(Boolean);
+        if (d === today && !evs.length && !ts.length) {
+          return (
+            <Fragment key={d}>
+              <li className="group-head">今日</li>
+              <li className="row empty-day">今日の予定・タスクはありません</li>
+            </Fragment>
+          );
+        }
+        return (
+          <Fragment key={d || "none"}>
+            <li className={`group-head ${d === "overdue" ? "overdue" : ""}`}>
+              {d === "overdue" ? "期限切れ" : d ? formatDay(d) : "日付なし"}
+            </li>
+            {evs.map((e) => (
               <EventRow key={`${e.calendar}:${e.id}`} e={e} />
             ))}
-          {notes.map((n, i) => ((nextDate(n) ?? "") === d ? row(n, i) : null))}
-        </Fragment>
-      ))}
+            {ts}
+          </Fragment>
+        );
+      })}
     </ul>
   );
 }

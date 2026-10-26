@@ -277,3 +277,5 @@ input, textarea { font-size: 16px; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
 .prop-error { margin: -2px 0 6px; }
 .error.small { font-size: 12px; }
+.group-head.overdue { color: var(--red); }
+.row.empty-day { color: var(--muted, #999); font-size: 13px; cursor: default; }

@@ -3,8 +3,7 @@ import type { Note } from "./supabase";
 // 「受信箱」「今日」などは保存場所ではなく、メモの属性から作る絞り込み結果（MCP の list_tasks と同じ定義）
 export type View =
   | { kind: "inbox" }
-  | { kind: "today" }
-  | { kind: "upcoming" }
+  | { kind: "today" } // 「予定」: 期限切れ・今日・明日以降のタスクとカレンダーの予定を日付順に1本で見る
   | { kind: "all" }
   | { kind: "tag"; tag: string }
   | { kind: "archive" }
@@ -13,8 +12,7 @@ export type View =
 
 export const VIEW_LABEL: Record<Exclude<View["kind"], "tag">, string> = {
   inbox: "受信箱",
-  today: "今日",
-  upcoming: "今後の予定",
+  today: "予定",
   all: "すべて",
   archive: "アーカイブ",
   trash: "ゴミ箱",
@@ -44,21 +42,9 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
           (n) =>
             live(n) &&
             n.is_task &&
-            (showDone
-              ? n.done_at && n.done_at.slice(0, 10) >= jstDate(-1)
-              : open(n) && ((n.scheduled_date && n.scheduled_date <= today) || (n.due_date && n.due_date <= today))),
+            (showDone ? n.done_at && n.done_at.slice(0, 10) >= jstDate(-1) : open(n) && (n.scheduled_date || n.due_date)),
         )
-        .sort(byTask);
-    case "upcoming":
-      return notes
-        .filter(
-          (n) =>
-            live(n) &&
-            n.is_task &&
-            open(n) &&
-            ((n.scheduled_date && n.scheduled_date > today) || (n.due_date && n.due_date > today)),
-        )
-        .sort((a, b) => (nextDate(a) ?? "").localeCompare(nextDate(b) ?? "") || byTask(a, b));
+        .sort((a, b) => (dayOf(a, today) ?? "").localeCompare(dayOf(b, today) ?? "") || byTask(a, b));
     case "all":
       return pinnedFirst(notes.filter((n) => live(n) && (showDone || open(n))));
     case "tag":
@@ -75,11 +61,22 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
 // notes は新しい順で届くので、安定ソートでピン留めだけ前に出す
 const pinnedFirst = (ns: Note[]) => [...ns].sort((a, b) => Number(b.pinned) - Number(a.pinned));
 
-/** 今後の予定で見出しに使う日付（予定日と締め切りの早いほう、ただし明日以降） */
-export function nextDate(n: Note, today = jstDate()) {
-  const ds = [n.scheduled_date, n.due_date].filter((d): d is string => !!d && d > today).sort();
-  return ds[0] ?? null;
+/**
+ * 「予定」で見出しに使う日。期限切れは "overdue"、やる日か締め切りが今日までなら今日、
+ * それ以外は早いほうの日付。日付がなければ null。
+ */
+export function dayOf(n: Note, today = jstDate()): string | null {
+  if (n.due_date && n.due_date < today) return "overdue";
+  const ds = [n.scheduled_date, n.due_date].filter((d): d is string => !!d).sort();
+  if (!ds.length) return null;
+  return ds[0] < today ? today : ds[0];
 }
+
+/** 今日のバッジに出す数（期限切れ＋今日） */
+export const isDueNow = (n: Note, today = jstDate()) => {
+  const d = dayOf(n, today);
+  return d === "overdue" || d === today;
+};
 
 function byTask(a: Note, b: Note) {
   // 締め切りが近い順 → 優先度が高い順 → 古い順
