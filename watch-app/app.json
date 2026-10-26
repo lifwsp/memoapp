@@ -4,30 +4,58 @@
     "appId": 1132828,
     "appName": "WristMemo",
     "appType": "app",
-    "version": { "code": 1, "name": "0.1.0" },
+    "version": {
+      "code": 2,
+      "name": "0.2.0"
+    },
     "icon": "icon.png",
     "vender": "kurimiso",
     "description": "Send voice/text memos from Amazfit Bip 6"
   },
-  "permissions": ["data:os.device.info", "device:os.local_storage"],
+  "permissions": [
+    "data:os.device.info",
+    "device:os.local_storage"
+  ],
   "runtime": {
-    "apiVersion": { "compatible": "4.0", "target": "4.2", "minVersion": "4.0" }
+    "apiVersion": {
+      "compatible": "4.0",
+      "target": "4.2",
+      "minVersion": "4.0"
+    }
   },
   "targets": {
     "common": {
       "module": {
-        "page": { "pages": ["page/index"] },
-        "app-side": { "path": "app-side/index" },
-        "setting": { "path": "setting/index" }
+        "page": {
+          "pages": [
+            "page/index",
+            "page/confirm",
+            "page/today"
+          ]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        },
+        "setting": {
+          "path": "setting/index"
+        }
       },
       "platforms": [
-        { "st": "r", "dw": 480 },
-        { "st": "s", "dw": 390 }
+        {
+          "st": "r",
+          "dw": 480
+        },
+        {
+          "st": "s",
+          "dw": 390
+        }
       ]
     }
   },
   "i18n": {
-    "en-US": { "appName": "WristMemo" }
+    "en-US": {
+      "appName": "WristMemo"
+    }
   },
   "defaultLanguage": "en-US"
 }

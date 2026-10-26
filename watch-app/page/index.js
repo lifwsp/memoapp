@@ -1,126 +1,103 @@
+// ホーム: 「メモ・タスク・予定」を選ぶとすぐ入力（既定は音声）→ 確認画面へ
 import * as hmUI from "@zos/ui";
 import { createKeyboard, deleteKeyboard, inputType } from "@zos/ui";
+import { push } from "@zos/router";
 import { showToast } from "@zos/interaction";
-import { log as Logger } from "@zos/utils";
+import { LocalStorage } from "@zos/storage";
 import { BasePage } from "@zeppos/zml/base-page";
-import { DEVICE_WIDTH, DEVICE_HEIGHT } from "../utils/device";
-import { loadQueue, saveQueue, newMemo } from "../utils/queue";
+import { loadQueue, loadSync } from "../utils/queue";
+import { flushQueue, syncFromPhone } from "../utils/send";
+import { PAD, W, TYPES, GRAY, DARK, ROUND } from "../utils/ui";
 
-const logger = Logger.getLogger("wristmemo");
-const ROUND = DEVICE_WIDTH === DEVICE_HEIGHT; // 丸型ウォッチ判定（Bip 6 は角型）
-const PAD = ROUND ? 70 : 20;
-const ROWS = 5;
+const storage = new LocalStorage();
 
 Page(
   BasePage({
-    state: { queue: [], rows: [], header: null, flushing: false },
+    state: { header: null, today: null, mode: null, kind: "voice" },
 
     build() {
-      const btnW = (DEVICE_WIDTH - PAD * 2 - 16) / 2;
-      const btnY = ROUND ? 90 : 60;
+      this.state.kind = storage.getItem("input_kind", "voice") === "text" ? "text" : "voice";
+      const top = ROUND ? 50 : 8;
 
       this.state.header = hmUI.createWidget(hmUI.widget.TEXT, {
-        x: PAD, y: ROUND ? 40 : 12, w: DEVICE_WIDTH - PAD * 2, h: 40,
-        text: "WristMemo", text_size: 28, color: 0xaaaaaa,
-        align_h: hmUI.align.CENTER_H,
+        x: PAD, y: top, w: W, h: 38,
+        text: "WristMemo", text_size: 24, color: GRAY,
+        align_h: hmUI.align.CENTER_H, align_v: hmUI.align.CENTER_V,
       });
 
-      hmUI.createWidget(hmUI.widget.BUTTON, {
-        x: PAD, y: btnY, w: btnW, h: 110, radius: 20,
-        text: "音声", text_size: 36,
-        normal_color: 0x1e88e5, press_color: 0x1565c0,
-        click_func: () => this.openKeyboard(inputType.VOICE, "voice"),
-      });
-      hmUI.createWidget(hmUI.widget.BUTTON, {
-        x: PAD + btnW + 16, y: btnY, w: btnW, h: 110, radius: 20,
-        text: "文字", text_size: 36,
-        normal_color: 0x43a047, press_color: 0x2e7d32,
-        click_func: () => this.openKeyboard(inputType.CHAR, "text"),
-      });
-
-      const listY = btnY + 130;
-      const rowH = Math.floor((DEVICE_HEIGHT - listY - (ROUND ? 60 : 16)) / ROWS);
-      for (let i = 0; i < ROWS; i++) {
-        this.state.rows.push(
-          hmUI.createWidget(hmUI.widget.TEXT, {
-            x: PAD, y: listY + i * rowH, w: DEVICE_WIDTH - PAD * 2, h: rowH,
-            text: "", text_size: 24, color: 0xffffff,
-            align_v: hmUI.align.CENTER_V,
-            text_style: hmUI.text_style.ELLIPSIS,
-          })
-        );
+      let y = top + 44;
+      for (const type of ["memo", "task", "event"]) {
+        const t = TYPES[type];
+        hmUI.createWidget(hmUI.widget.BUTTON, {
+          x: PAD, y, w: W, h: 84, radius: 22,
+          text: t.label, text_size: 38, color: t.text,
+          normal_color: t.color, press_color: t.press,
+          click_func: () => this.openKeyboard(type),
+        });
+        y += 94;
       }
 
-      this.state.queue = loadQueue();
-      this.render();
-      this.flush();
+      this.state.today = hmUI.createWidget(hmUI.widget.BUTTON, {
+        x: PAD, y, w: W, h: 58, radius: 16,
+        text: this.todayText(loadSync()), text_size: 26, color: 0xffffff,
+        normal_color: DARK, press_color: 0x3a3a3a,
+        click_func: () => push({ url: "page/today" }),
+      });
+      y += 66;
+
+      this.state.mode = hmUI.createWidget(hmUI.widget.BUTTON, {
+        x: PAD, y, w: W, h: 40, radius: 12,
+        text: this.modeText(), text_size: 22, color: GRAY,
+        normal_color: 0x000000, press_color: DARK,
+        click_func: () => {
+          this.state.kind = this.state.kind === "voice" ? "text" : "voice";
+          storage.setItem("input_kind", this.state.kind);
+          this.state.mode.setProperty(hmUI.prop.TEXT, this.modeText());
+        },
+      });
+
+      this.renderHeader(loadQueue());
+      this.refresh();
     },
 
-    openKeyboard(type, kind) {
+    async refresh() {
+      const left = await flushQueue(this, (q) => this.renderHeader(q));
+      if (left) showToast({ content: `未送信 ${left} 件（次回再送）` });
+      const s = await syncFromPhone(this);
+      if (s) this.state.today.setProperty(hmUI.prop.TEXT, this.todayText(s));
+    },
+
+    modeText() {
+      return this.state.kind === "voice" ? "入力: 音声（タップで文字に）" : "入力: 文字（タップで音声に）";
+    },
+
+    todayText(s) {
+      const tasks = (s.tasks || []).length;
+      const events = (s.events || []).length;
+      return `今日  タスク ${tasks} · 予定 ${events}`;
+    },
+
+    renderHeader(queue) {
+      const pending = queue.filter((m) => m.status !== "sent").length;
+      const last = queue[queue.length - 1];
+      let text = "WristMemo";
+      if (pending) text = `未送信 ${pending} 件`;
+      else if (last) text = `✓ ${last.text}`;
+      this.state.header.setProperty(hmUI.prop.MORE, { text, color: pending ? 0xffca28 : GRAY });
+    },
+
+    openKeyboard(type) {
+      const kind = this.state.kind;
       createKeyboard({
-        inputType: type,
+        inputType: kind === "voice" ? inputType.VOICE : inputType.CHAR,
         text: "",
         onComplete: (_kb, result) => {
           const text = ((result && result.data) || "").trim();
           deleteKeyboard();
           if (!text) return;
-          this.state.queue = saveQueue([...this.state.queue, newMemo(text, kind)]);
-          this.render();
-          this.flush();
+          push({ url: "page/confirm", params: JSON.stringify({ text, kind, type }) });
         },
         onCancel: () => deleteKeyboard(),
-      });
-    },
-
-    // 未送信メモを1件ずつ Side Service（スマホの Zepp アプリ内）へ送る
-    async flush() {
-      if (this.state.flushing) return;
-      this.state.flushing = true;
-      const tried = {};
-      try {
-        // 送信中に新しいメモが追加されても取りこぼさないよう、未試行がなくなるまで回す
-        let memo;
-        while ((memo = this.state.queue.find((m) => m.status !== "sent" && !tried[m.id]))) {
-          tried[memo.id] = true;
-          try {
-            const res = await this.request({
-              method: "ADD_NOTE",
-              params: { id: memo.id, text: memo.text, kind: memo.kind, createdAt: memo.createdAt },
-            });
-            memo.status = res && res.ok ? "sent" : "error";
-            memo.error = res && !res.ok ? String(res.error || "") : undefined;
-          } catch (e) {
-            // BLE 切断・Side Service 未起動など。次回起動時に再送する
-            logger.log("send failed", e && (e.message || e.reason));
-            memo.status = "error";
-            memo.error = "phone";
-            this.state.queue.forEach((m) => { tried[m.id] = true; });
-          } finally {
-            this.state.queue = saveQueue(this.state.queue);
-            this.render();
-          }
-        }
-      } finally {
-        this.state.flushing = false;
-      }
-      const left = this.state.queue.filter((m) => m.status !== "sent").length;
-      if (left) showToast({ content: `未送信 ${left} 件（次回再送）` });
-    },
-
-    render() {
-      const recent = this.state.queue.slice(-ROWS).reverse();
-      const pending = this.state.queue.filter((m) => m.status !== "sent").length;
-      this.state.header.setProperty(
-        hmUI.prop.TEXT,
-        pending ? `WristMemo  未送信 ${pending}` : "WristMemo"
-      );
-      this.state.rows.forEach((w, i) => {
-        const m = recent[i];
-        const mark = !m ? "" : m.status === "sent" ? "✓ " : m.status === "error" ? "! " : "… ";
-        w.setProperty(hmUI.prop.MORE, {
-          text: m ? mark + m.text : "",
-          color: !m ? 0xffffff : m.status === "sent" ? 0x9e9e9e : 0xffca28,
-        });
       });
     },
   })
