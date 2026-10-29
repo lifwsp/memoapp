@@ -5,8 +5,8 @@
     "appName": "WristMemo",
     "appType": "app",
     "version": {
-      "code": 2,
-      "name": "0.2.0"
+      "code": 3,
+      "name": "0.3.0"
     },
     "icon": "icon.png",
     "vender": "kurimiso",
@@ -31,6 +31,24 @@
             "page/index",
             "page/confirm",
             "page/today"
+          ]
+        },
+        "secondary-widget": {
+          "widgets": [
+            {
+              "path": "secondary-widget/index",
+              "icon": "icon.png",
+              "preview": "preview.png",
+              "name": "WristMemo",
+              "runtime": {
+                "type": "js"
+              },
+              "i18n": {
+                "en-US": {
+                  "name": "WristMemo"
+                }
+              }
+            }
           ]
         },
         "app-side": {

@@ -13,7 +13,15 @@ const storage = new LocalStorage();
 
 Page(
   BasePage({
-    state: { header: null, today: null, mode: null, kind: "voice" },
+    state: { header: null, today: null, mode: null, kind: "voice", quick: null },
+
+    // ウィジェットの「メモする」から来たときは params に { quick: "memo" } が入る
+    onInit(params) {
+      try {
+        const p = JSON.parse(params || "{}");
+        if (TYPES[p.quick]) this.state.quick = p.quick;
+      } catch (e) {}
+    },
 
     build() {
       this.state.kind = storage.getItem("input_kind", "voice") === "text" ? "text" : "voice";
@@ -58,6 +66,7 @@ Page(
 
       this.renderHeader(loadQueue());
       this.refresh();
+      if (this.state.quick) setTimeout(() => this.openKeyboard(this.state.quick), 300);
     },
 
     async refresh() {

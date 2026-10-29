@@ -37,7 +37,7 @@ export async function syncFromPhone(page) {
   try {
     const res = await page.request({ method: "SYNC", params: {} });
     if (!res || !res.ok) return null;
-    const data = { date: res.date, tags: res.tags || [], tasks: res.tasks || [], events: res.events || [] };
+    const data = { date: res.date, tags: res.tags || [], tasks: res.tasks || [], events: res.events || [], at: Date.now() };
     saveSync(data);
     return data;
   } catch (e) {

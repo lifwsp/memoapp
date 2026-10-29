@@ -44,7 +44,8 @@ export function newMemo(text, kind, type, tags) {
   };
 }
 
-// { date, tags: [], tasks: [{id,title,overdue,time,due,repeat}], events: [{title,time}] }
+// { date, at, tags: [], tasks: [{id,title,overdue,time,due,repeat,left}], events: [{title,time}] }
+// at: 同期した時刻（ms）。ウィジェットの「◯時◯分 更新」に使う
 export function loadSync() {
   return read(SYNC_KEY, { date: "", tags: [], tasks: [], events: [] });
 }
