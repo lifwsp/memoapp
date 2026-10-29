@@ -15,6 +15,7 @@
 import { admin, googleConnected, json, listCalendarEvents, OWNER_USER_ID, sendNote, timingSafeEqual } from "../_shared/integrations.ts";
 import { parseWhen, routeByPrefix } from "../_shared/jpdate.ts";
 import { asRule, describeRepeat, jstToday, taskFromText } from "../_shared/repeat.ts";
+import { daysLeft, isDeadlineSoon } from "../_shared/deadline.ts";
 
 const WATCH_TOKEN = Deno.env.get("WATCH_TOKEN") ?? "";
 type Sb = ReturnType<typeof admin>;
@@ -121,24 +122,29 @@ async function sync(sb: Sb) {
     .map((n) => {
       const overdue = !!n.due_date && n.due_date < today;
       const d = [n.scheduled_date, n.due_date].filter(Boolean).sort()[0] as string | undefined;
-      return { n, overdue, due: overdue || (!!d && d <= today) };
+      // 締切まで 10 日を切った締め切りタスクも「今日」に入れる（期限切れ・今日の分の後ろ）
+      const soon = isDeadlineSoon(n, today);
+      return { n, overdue, soon, due: overdue || (!!d && d <= today) || soon };
     })
     .filter((x) => x.due)
     // PWA の「予定」と同じ並び: 期限切れが先、その中は手で並べた順（sort_order が小さいほど上）
     .sort(
       (a, b) =>
         Number(b.overdue) - Number(a.overdue) ||
+        Number(a.soon) - Number(b.soon) ||
+        (a.soon ? String(a.n.due_date).localeCompare(String(b.n.due_date)) : 0) ||
         a.n.sort_order - b.n.sort_order ||
         String(b.n.created_at).localeCompare(String(a.n.created_at)),
     )
     .slice(0, 30)
-    .map(({ n, overdue }) => ({
+    .map(({ n, overdue, soon }) => ({
       id: n.id,
       title: (n.title || n.body.split("\n")[0] || "").slice(0, 60),
       overdue,
       time: n.due_time ? String(n.due_time).slice(0, 5) : null,
       due: overdue ? md(n.due_date!) : null,
       repeat: n.repeat_rule ? describeRepeat(asRule(n.repeat_rule)) : null,
+      left: soon ? daysLeft(n.due_date!, today) : null, // 締め切りタスク: あと何日（古いウォッチは無視する）
     }));
   const events = cal.events
     .filter((e) => e.date <= today && today <= e.end_date)

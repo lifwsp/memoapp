@@ -51,6 +51,10 @@ import {
   isOverdue,
   jstDate,
   dayOf,
+  daysLeft,
+  DEADLINE,
+  groupKey,
+  isDeadlineSoon,
   orderForMove,
   isDueNow,
   childrenOf,
@@ -312,6 +316,12 @@ function Notes({ session }: { session: Session }) {
     setNotes((ns) => [data as Note, ...ns.filter((n) => n.id !== (data as Note).id)]);
   }
 
+  // 締め切りタスクを今日やる: やる日を今日にする（締切はそのまま）
+  function planToday(n: Note) {
+    patch(n.id, { scheduled_date: jstDate() });
+    flash({ text: `今日やる: ${headline(n)}`, undo: () => patch(n.id, { scheduled_date: null }) });
+  }
+
   // 並べ替え（ドラッグ）: 動かした1件の sort_order を前後の間の値にする。ほかの端末には realtime で届く
   async function reorder(n: Note, sort_order: number) {
     if (sort_order === n.sort_order) return;
@@ -443,6 +453,7 @@ function Notes({ session }: { session: Session }) {
                 }}
                 onToggle={toggleDone}
                 onReorder={query.trim() || view.kind === "trash" || showDone ? undefined : reorder}
+                onPlanToday={view.kind === "today" && !showDone ? planToday : undefined}
               />
             )}
             {wantsCalendar && calError && !query.trim() && <p className="error small">カレンダー: {calError}</p>}
@@ -639,6 +650,7 @@ function NoteList({
   onOpen,
   onToggle,
   onReorder,
+  onPlanToday,
 }: {
   notes: Note[];
   events: CalendarEvent[];
@@ -652,6 +664,8 @@ function NoteList({
   onToggle: (n: Note) => void;
   /** 渡したときだけドラッグで並べ替えられる（検索・ゴミ箱・完了の表示では渡さない） */
   onReorder?: (n: Note, sort_order: number) => void;
+  /** 締切が先のタスクに「今日やる」（やる日を今日に）を出す */
+  onPlanToday?: (n: Note) => void;
 }) {
   const today = jstDate();
   // マウスは 6px 動かしたら、タッチは長押し（0.25 秒）でつかむ。ふつうのタップ・クリック・スクロールはそのまま
@@ -667,6 +681,7 @@ function NoteList({
     if (!onReorder || !over || active.id === over.id) return;
     const a = notes.find((n) => n.id === active.id);
     const o = notes.find((n) => n.id === over.id);
+    if (a && groupOf(a) === DEADLINE) return; // 締め切りタスクは締切の近い順で固定
     if (!a || !o || groupOf(a) !== groupOf(o) || a.pinned !== o.pinned) return; // ピン留めの境目もまたがない
     const list = notes.filter((n) => groupOf(n) === groupOf(a));
     const from = list.indexOf(a);
@@ -685,6 +700,8 @@ function NoteList({
   );
   const row = (n: Note, i: number) => {
     const sent = links.filter((l) => l.note_id === n.id);
+    const left = n.due_date && !n.done_at ? daysLeft(n.due_date, today) : null;
+    const soon = isDeadlineSoon(n, today);
     const rule = asRule(n.repeat_rule);
     const subs = (kids.get(n.id) ?? []).filter((c) => c.is_task);
     const parent = n.parent_id ? parentOf(n) : undefined;
@@ -693,7 +710,7 @@ function NoteList({
         key={n.id}
         id={n.id}
         disabled={!onReorder}
-        className={`row ${i === cursor ? "cursor" : ""} ${selectedId === n.id ? "selected" : ""} ${n.done_at ? "done" : ""}`}
+        className={`row ${i === cursor ? "cursor" : ""} ${selectedId === n.id ? "selected" : ""} ${n.done_at ? "done" : ""} ${soon ? "soon" : ""}`}
         onClick={() => onOpen(n, i)}
       >
         {n.is_task ? (
@@ -728,6 +745,7 @@ function NoteList({
                 {n.due_time && ` ${n.due_time.slice(0, 5)}`}
               </span>
             )}
+            {left !== null && left > 1 && left <= 30 && <span className={soon ? "soon-left" : ""}>あと{left}日</span>}
             {n.scheduled_date && !grouped && n.scheduled_date !== n.due_date && (
               <span>予定 {formatDay(n.scheduled_date, today)}</span>
             )}
@@ -750,6 +768,18 @@ function NoteList({
             ))}
             {sent.some((l) => l.status === "error") && <span className="overdue">送信失敗</span>}
             {sent.some((l) => l.status === "ok" && l.type === "calendar") && <span>→カレンダー</span>}
+            {onPlanToday && n.is_task && !n.done_at && !n.scheduled_date && (n.due_date ?? "") > today && (
+              <button
+                className="plan-today"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPlanToday(n);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                今日やる
+              </button>
+            )}
             {!n.is_task && <span className="time">{formatDate(n.created_at)}</span>}
           </div>
         </div>
@@ -768,10 +798,7 @@ function NoteList({
   const days = new Set<string>([today]);
   notes.forEach((n) => days.add(dayOf(n, today) ?? ""));
   events.forEach((e) => e.end_date >= today && days.add(evDay(e)));
-  const order = [...days].sort((x, y) => {
-    const k = (d: string) => (d === "overdue" ? "0" : d || "9999");
-    return k(x).localeCompare(k(y));
-  });
+  const order = [...days].sort((x, y) => groupKey(x, today).localeCompare(groupKey(y, today)));
   // 日ごとに別の DndContext にする（ほかの日へは動かせない。動かすと日付が変わってしまうため）
   return (
     <ul className="list">
@@ -788,8 +815,8 @@ function NoteList({
         }
         return (
           <Fragment key={d || "none"}>
-            <li className={`group-head ${d === "overdue" ? "overdue" : ""}`}>
-              {d === "overdue" ? "期限切れ" : d ? formatDay(d) : "日付なし"}
+            <li className={`group-head ${d === "overdue" ? "overdue" : ""} ${d === DEADLINE ? "deadline" : ""}`}>
+              {d === "overdue" ? "期限切れ" : d === DEADLINE ? "締め切りタスク（30日以内・いつでも着手できる）" : d ? formatDay(d) : "日付なし"}
             </li>
             {evs.map((e) => (
               <EventRow key={`${e.calendar}:${e.id}`} e={e} />

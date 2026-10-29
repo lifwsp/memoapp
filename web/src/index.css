@@ -314,3 +314,13 @@ input, textarea { font-size: 16px; }
 }
 .subtask .grip { cursor: grab; color: var(--muted); touch-action: none; padding: 2px; margin-left: -4px; }
 .subtask .grip:active { cursor: grabbing; }
+
+/* 締め切りタスク（締切だけ決まっていて今も手を付けられる） */
+.group-head.deadline { color: var(--muted); }
+.row.soon { box-shadow: inset 3px 0 0 var(--orange); }
+.soon-left { color: var(--orange); font-weight: 600; }
+.plan-today {
+  border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--muted);
+  font-size: 11px; padding: 0 8px; line-height: 18px; cursor: pointer;
+}
+.plan-today:hover { color: inherit; border-color: currentColor; }

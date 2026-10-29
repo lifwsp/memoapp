@@ -73,7 +73,8 @@ Page(
       const d = this.state.done[t.id];
       const title = t.title.length > 15 ? `${t.title.slice(0, 15)}…` : t.title;
       if (d) return `✓ ${title}\n   ${d.next ? `次は ${d.next}` : "完了"}（タップで戻す）`;
-      const sub = [t.overdue ? `期限切れ ${t.due}` : t.time ? `${t.time}まで` : "", t.repeat || ""].filter(Boolean).join(" · ");
+      const when = t.overdue ? `期限切れ ${t.due}` : t.left ? `締切まで あと${t.left}日` : t.time ? `${t.time}まで` : "";
+      const sub = [when, t.repeat || ""].filter(Boolean).join(" · ");
       return `○ ${title}${sub ? `\n   ${sub}` : ""}`;
     },
 

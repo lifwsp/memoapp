@@ -1,4 +1,5 @@
 import type { Note } from "./supabase";
+import { isDeadlineSoon, isDeadlineTask } from "../../../supabase/functions/_shared/deadline.ts";
 
 // 「受信箱」「今日」などは保存場所ではなく、メモの属性から作る絞り込み結果（MCP の list_tasks と同じ定義）
 export type View =
@@ -46,7 +47,14 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
             n.is_task &&
             (showDone ? n.done_at && n.done_at.slice(0, 10) >= jstDate(-1) : open(n) && (n.scheduled_date || n.due_date)),
         )
-        .sort((a, b) => (dayOf(a, today) ?? "").localeCompare(dayOf(b, today) ?? "") || bySortOrder(a, b));
+        .sort((a, b) => {
+          const da = dayOf(a, today) ?? "";
+          const db = dayOf(b, today) ?? "";
+          if (da !== db) return groupKey(da).localeCompare(groupKey(db));
+          // 締め切りタスクは締切の近い順（手での並べ替えはしない）
+          if (da === DEADLINE) return a.due_date!.localeCompare(b.due_date!) || bySortOrder(a, b);
+          return bySortOrder(a, b);
+        });
     case "all":
       return pinnedFirst(notes.filter((n) => live(n) && top(n) && (showDone || open(n))));
     case "tag":
@@ -63,22 +71,35 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
 // ピン留めを先に、あとは手で並べた順（sort_order が小さいほど上。新しいメモは負の大きな値で先頭に来る）
 const pinnedFirst = (ns: Note[]) => [...ns].sort((a, b) => Number(b.pinned) - Number(a.pinned) || bySortOrder(a, b));
 
+/** 「予定」の見出し: 締め切りタスク（締切だけ決まっていて今も手を付けられるもの）は今日の下にまとめる */
+export const DEADLINE = "deadline";
+
+/** 「予定」のかたまりの並び: 期限切れ → 今日 → 締め切りタスク → 明日以降 → 日付なし */
+export function groupKey(d: string, today = jstDate()) {
+  if (d === "overdue") return "0";
+  if (d === DEADLINE) return `${today}~`; // 今日のすぐ後（"~" は数字より後ろに並ぶ）
+  return d || "9999";
+}
+
 /**
- * 「予定」で見出しに使う日。期限切れは "overdue"、やる日か締め切りが今日までなら今日、
- * それ以外は早いほうの日付。日付がなければ null。
+ * 「予定」で見出しに使う日。期限切れは "overdue"、締め切りタスクは "deadline"、
+ * やる日か締め切りが今日までなら今日、それ以外は早いほうの日付。日付がなければ null。
  */
 export function dayOf(n: Note, today = jstDate()): string | null {
   if (n.due_date && n.due_date < today) return "overdue";
+  if (isDeadlineTask(n, today)) return DEADLINE;
   const ds = [n.scheduled_date, n.due_date].filter((d): d is string => !!d).sort();
   if (!ds.length) return null;
   return ds[0] < today ? today : ds[0];
 }
 
-/** 今日のバッジに出す数（期限切れ＋今日） */
+/** 今日のバッジに出す数（期限切れ＋今日＋締切まで 10 日を切った締め切りタスク） */
 export const isDueNow = (n: Note, today = jstDate()) => {
   const d = dayOf(n, today);
-  return d === "overdue" || d === today;
+  return d === "overdue" || d === today || isDeadlineSoon(n, today);
 };
+
+export { daysLeft, isDeadlineSoon, DEADLINE_SOON_DAYS } from "../../../supabase/functions/_shared/deadline.ts";
 
 
 export function searchNotes(notes: Note[], q: string) {

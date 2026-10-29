@@ -12,6 +12,7 @@ import {
   sendNote,
   timingSafeEqual,
 } from "../_shared/integrations.ts";
+import { DEADLINE_SOON_DAYS, DEADLINE_WINDOW_DAYS, daysLeft, isDeadlineSoon } from "../_shared/deadline.ts";
 import { asRule, describeRepeat, firstOccurrence, jstToday, parseRepeat, type RepeatRule } from "../_shared/repeat.ts";
 
 // 時刻のないタスクを知らせる時刻（日本時間）
@@ -47,11 +48,11 @@ const tools = [
   {
     name: "list_tasks",
     description:
-      "WristMemo のタスク（is_task のメモ）を一覧する。view: today=今日やること（予定日か締め切りが今日以前の未完了）, overdue=締め切りを過ぎた未完了, upcoming=明日以降に予定・締め切りがある未完了, inbox=日付のない未完了, done=最近完了したもの, all=未完了すべて。日付はすべて日本時間。各タスクの remind_at は知らせるべき日時（due_time がなければ 9:00）、repeat_text は繰り返しの説明。",
+      "WristMemo のタスク（is_task のメモ）を一覧する。view: today=今日やること（予定日か締め切りが今日以前の未完了＋締切まで10日を切った締め切りタスク。後者には soon=true と days_left が付く）, overdue=締め切りを過ぎた未完了, upcoming=明日以降に予定・締め切りがある未完了, deadline=締め切りタスク（締切が明日〜30日後で、やる日・繰り返し・時刻がない＝今も手を付けられるもの。締切の近い順。days_left と、10日を切ると soon=true が付く。「手が空いたけど何やる？」に使う）, inbox=日付のない未完了, done=最近完了したもの, all=未完了すべて。日付はすべて日本時間。各タスクの remind_at は知らせるべき日時（due_time がなければ 9:00）、repeat_text は繰り返しの説明。",
     inputSchema: {
       type: "object",
       properties: {
-        view: { type: "string", enum: ["today", "overdue", "upcoming", "inbox", "done", "all"] },
+        view: { type: "string", enum: ["today", "overdue", "upcoming", "deadline", "inbox", "done", "all"] },
         tag: { type: "string", description: "このタグが付いたものだけ" },
         days: { type: "number", description: "upcoming の範囲（日数、既定 14）" },
       },
@@ -239,7 +240,11 @@ async function callTool(name: string, a: Args) {
         q = q.not("done_at", "is", null).order("done_at", { ascending: false }).limit(30);
       } else {
         q = q.is("done_at", null);
-        if (view === "today") q = q.or(`scheduled_date.lte.${today},due_date.lte.${today}`);
+        // 今日: やる日か締切が今日まで＋締切まで 10 日を切った締め切りタスク（PWA の今日の数・ウォッチと同じ）
+        if (view === "today")
+          q = q.or(
+            `scheduled_date.lte.${today},due_date.lte.${today},and(due_date.lte.${todayJst(DEADLINE_SOON_DAYS)},scheduled_date.is.null,repeat_rule.is.null,due_time.is.null)`,
+          );
         else if (view === "overdue") q = q.lt("due_date", today);
         else if (view === "upcoming") {
           const until = todayJst(Number(a.days) || 14);
@@ -247,6 +252,13 @@ async function callTool(name: string, a: Args) {
             `and(scheduled_date.gt.${today},scheduled_date.lte.${until}),and(due_date.gt.${today},due_date.lte.${until})`,
           );
         } else if (view === "inbox") q = q.is("due_date", null).is("scheduled_date", null);
+        else if (view === "deadline")
+          q = q
+            .gt("due_date", today)
+            .lte("due_date", todayJst(DEADLINE_WINDOW_DAYS))
+            .is("scheduled_date", null)
+            .is("repeat_rule", null)
+            .is("due_time", null);
         q = q
           .order("due_date", { ascending: true, nullsFirst: false })
           .order("priority", { ascending: false })
@@ -256,7 +268,14 @@ async function callTool(name: string, a: Args) {
       if (str(a.tag)) q = q.contains("tags", [str(a.tag)!.replace(/^#/, "")]);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
-      return { today, view, tasks: presentAll(data) };
+      const tasks = presentAll(data);
+      if (view === "deadline" || view === "today")
+        for (const t of tasks) {
+          if (view === "today" && !isDeadlineSoon(t as never, today)) continue;
+          t.days_left = daysLeft(t.due_date as string, today);
+          t.soon = isDeadlineSoon(t as never, today);
+        }
+      return { today, view, tasks };
     }
     case "search_notes": {
       let q = mine().order("created_at", { ascending: false }).limit(Math.min(Number(a.limit) || 20, 100));
