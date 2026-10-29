@@ -24,7 +24,20 @@ export default defineConfig({
           { src: "icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
-      workbox: { navigateFallbackDenylist: [/^\/auth/] },
+      workbox: {
+        navigateFallbackDenylist: [/^\/auth/],
+        // フォントは分割ファイルが多いのでプリキャッシュせず、使った分だけ保存する
+        runtimeCaching: [
+          {
+            urlPattern: ({ request }) => request.destination === "font",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "fonts",
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 365 },
+            },
+          },
+        ],
+      },
     }),
   ],
 });

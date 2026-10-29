@@ -11,7 +11,7 @@
   --orange: #d9822b;
   --blue: #2f6fd6;
   --tabbar-h: 0px;
-  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-family: "LINE Seed JP", -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
   color: var(--ink);
   background: var(--bg);
   -webkit-text-size-adjust: 100%;

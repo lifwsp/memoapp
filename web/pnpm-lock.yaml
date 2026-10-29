@@ -20,6 +20,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.3.1)
+      '@fontsource/line-seed-jp':
+        specifier: ^5.3.2
+        version: 5.3.2
       '@supabase/supabase-js':
         specifier: ^2.118.0
         version: 2.118.0
@@ -594,6 +597,9 @@ packages:
     resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
     peerDependencies:
       react: '>=16.8.0'
+
+  '@fontsource/line-seed-jp@5.3.2':
+    resolution: {integrity: sha512-ng/gMt1yI9EAU0TlBcDtBuQAy8fB0FAvjxW3JY9NnYSN3CJgqkciMcEAldt/N0yUC4C4Oai4oeLzU9PYqyeghQ==}
 
   '@isaacs/cliui@9.0.0':
     resolution: {integrity: sha512-AokJm4tuBHillT+FpMtxQ60n8ObyXBatq7jD2/JA9dxbDDokKQm8KMht5ibGzLVU9IJDIKK4TPKgMHEYMn3lMg==}
@@ -2858,6 +2864,8 @@ snapshots:
     dependencies:
       react: 19.3.1
       tslib: 2.8.1
+
+  '@fontsource/line-seed-jp@5.3.2': {}
 
   '@isaacs/cliui@9.0.0': {}
 
