@@ -97,7 +97,7 @@ async function sync(sb: Sb) {
   const [{ data: notes, error }, cal] = await Promise.all([
     sb
       .from("notes")
-      .select("id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,repeat_rule,repeat_from,priority")
+      .select("id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,repeat_rule,repeat_from,priority,pinned,sort_order,created_at")
       .eq("user_id", OWNER_USER_ID)
       .is("deleted_at", null)
       .eq("archived", false),
@@ -124,7 +124,13 @@ async function sync(sb: Sb) {
       return { n, overdue, due: overdue || (!!d && d <= today) };
     })
     .filter((x) => x.due)
-    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.n.due_date ?? "9").localeCompare(b.n.due_date ?? "9") || b.n.priority - a.n.priority)
+    // PWA の「予定」と同じ並び: 期限切れが先、その中は手で並べた順（sort_order が小さいほど上）
+    .sort(
+      (a, b) =>
+        Number(b.overdue) - Number(a.overdue) ||
+        a.n.sort_order - b.n.sort_order ||
+        String(b.n.created_at).localeCompare(String(a.n.created_at)),
+    )
     .slice(0, 30)
     .map(({ n, overdue }) => ({
       id: n.id,

@@ -46,13 +46,13 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
             n.is_task &&
             (showDone ? n.done_at && n.done_at.slice(0, 10) >= jstDate(-1) : open(n) && (n.scheduled_date || n.due_date)),
         )
-        .sort((a, b) => (dayOf(a, today) ?? "").localeCompare(dayOf(b, today) ?? "") || byTask(a, b));
+        .sort((a, b) => (dayOf(a, today) ?? "").localeCompare(dayOf(b, today) ?? "") || bySortOrder(a, b));
     case "all":
       return pinnedFirst(notes.filter((n) => live(n) && top(n) && (showDone || open(n))));
     case "tag":
       return pinnedFirst(notes.filter((n) => live(n) && top(n) && (showDone || open(n)) && n.tags.includes(view.tag)));
     case "archive":
-      return notes.filter((n) => !n.deleted_at && top(n) && n.archived);
+      return [...notes.filter((n) => !n.deleted_at && top(n) && n.archived)].sort(bySortOrder);
     case "trash":
       return notes.filter((n) => n.deleted_at);
     case "settings":
@@ -60,8 +60,8 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
   }
 }
 
-// notes は新しい順で届くので、安定ソートでピン留めだけ前に出す
-const pinnedFirst = (ns: Note[]) => [...ns].sort((a, b) => Number(b.pinned) - Number(a.pinned));
+// ピン留めを先に、あとは手で並べた順（sort_order が小さいほど上。新しいメモは負の大きな値で先頭に来る）
+const pinnedFirst = (ns: Note[]) => [...ns].sort((a, b) => Number(b.pinned) - Number(a.pinned) || bySortOrder(a, b));
 
 /**
  * 「予定」で見出しに使う日。期限切れは "overdue"、やる日か締め切りが今日までなら今日、
@@ -80,12 +80,6 @@ export const isDueNow = (n: Note, today = jstDate()) => {
   return d === "overdue" || d === today;
 };
 
-function byTask(a: Note, b: Note) {
-  // 締め切りが近い順 → 優先度が高い順 → 古い順
-  const da = a.due_date ?? "9999";
-  const db = b.due_date ?? "9999";
-  return da.localeCompare(db) || b.priority - a.priority || a.created_at.localeCompare(b.created_at);
-}
 
 export function searchNotes(notes: Note[], q: string) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -141,4 +135,22 @@ export function childrenOf(notes: Note[]) {
   for (const list of m.values()) list.sort(bySortOrder);
   return m;
 }
-export const bySortOrder = (a: Note, b: Note) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at);
+export const bySortOrder = (a: Note, b: Note) => a.sort_order - b.sort_order || b.created_at.localeCompare(a.created_at);
+
+/**
+ * ドラッグで list[from] を list[to] の位置へ動かしたときの、新しい sort_order。
+ * 前後の値の間（中点）を返すので、書き換えは動かした1件だけで済む。
+ * same を渡すと、それを満たさない隣（ピン留めの境目など）は無視する。
+ */
+export function orderForMove(list: Note[], from: number, to: number, same: (a: Note, b: Note) => boolean = () => true) {
+  const moving = list[from];
+  const rest = list.filter((_, i) => i !== from);
+  const prev = rest[to - 1];
+  const next = rest[to];
+  const p = prev && same(prev, moving) ? prev.sort_order : undefined;
+  const n = next && same(next, moving) ? next.sort_order : undefined;
+  if (p !== undefined && n !== undefined) return p === n ? p : (p + n) / 2;
+  if (p !== undefined) return p + 1;
+  if (n !== undefined) return n - 1;
+  return moving.sort_order;
+}

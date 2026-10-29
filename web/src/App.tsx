@@ -4,14 +4,13 @@ import {
   ArchiveRestore,
   CalendarDays,
   Check,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
   Ellipsis,
   Hash,
   Inbox,
   Layers,
+  GripVertical,
   ListChecks,
   LogOut,
   PanelLeft,
@@ -27,6 +26,19 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
+import {
+  DndContext,
+  MouseSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { supabase, type ExternalLink, type Note } from "./lib/supabase";
 import { api, type CalendarEvent, type Parsed, type Status } from "./lib/integrations";
 import { asRule, describeRepeat, parseRepeat, taskFromText } from "./lib/repeat";
@@ -39,6 +51,7 @@ import {
   isOverdue,
   jstDate,
   dayOf,
+  orderForMove,
   isDueNow,
   childrenOf,
   searchNotes,
@@ -77,7 +90,10 @@ function Login() {
     e.preventDefault();
     setBusy(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({ email: OWNER_EMAIL, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: OWNER_EMAIL,
+      password,
+    });
     if (error) setError("パスワードが違います");
     setBusy(false);
   }
@@ -238,8 +254,22 @@ function Notes({ session }: { session: Session }) {
     const done = !n.done_at;
     const before = { done_at: n.done_at, due_date: n.due_date, scheduled_date: n.scheduled_date, last_done_at: n.last_done_at, done_count: n.done_count };
     if (!n.is_task) await supabase.from("notes").update({ is_task: true }).eq("id", n.id);
-    if (!n.repeat_rule) setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, is_task: true, done_at: done ? new Date().toISOString() : null } : x)));
-    const { data, error } = await supabase.rpc("complete_task", { p_id: n.id, p_done: done });
+    if (!n.repeat_rule)
+      setNotes((ns) =>
+        ns.map((x) =>
+          x.id === n.id
+            ? {
+                ...x,
+                is_task: true,
+                done_at: done ? new Date().toISOString() : null,
+              }
+            : x,
+        ),
+      );
+    const { data, error } = await supabase.rpc("complete_task", {
+      p_id: n.id,
+      p_done: done,
+    });
     if (error) {
       flash({ text: `保存できませんでした: ${error.message}` });
       return load();
@@ -251,8 +281,15 @@ function Notes({ session }: { session: Session }) {
     if (!done) return;
     if (n.repeat_rule) {
       const next = after.due_date ?? after.scheduled_date;
-      flash({ text: `完了: ${headline(n)} → 次は ${next ? formatDay(next) : "未定"}`, undo: () => patch(n.id, before) });
-    } else flash({ text: `完了: ${headline(n)}`, undo: () => patch(n.id, { done_at: null }) });
+      flash({
+        text: `完了: ${headline(n)} → 次は ${next ? formatDay(next) : "未定"}`,
+        undo: () => patch(n.id, before),
+      });
+    } else
+      flash({
+        text: `完了: ${headline(n)}`,
+        undo: () => patch(n.id, { done_at: null }),
+      });
   }
 
   // サブタスクを足す（親の末尾に）。親がメモでも、子はチェックの付くタスクにする
@@ -275,27 +312,24 @@ function Notes({ session }: { session: Session }) {
     setNotes((ns) => [data as Note, ...ns.filter((n) => n.id !== (data as Note).id)]);
   }
 
-  // 並べ替え: 隣と入れ替える
-  async function moveSubtask(n: Note, dir: -1 | 1) {
-    const list = kids.get(n.parent_id ?? "") ?? [];
-    const i = list.findIndex((x) => x.id === n.id);
-    const other = list[i + dir];
-    if (!other) return;
-    // sort_order が同じこともあるので、並びの位置で振り直す
-    const order = list.map((x) => x.id);
-    [order[i], order[i + dir]] = [order[i + dir], order[i]];
-    const fields = new Map(order.map((id, k) => [id, k + 1]));
-    setNotes((ns) => ns.map((x) => (fields.has(x.id) ? { ...x, sort_order: fields.get(x.id)! } : x)));
-    for (const [id, k] of fields) {
-      const cur = list.find((x) => x.id === id)!;
-      if (cur.sort_order !== k) await supabase.from("notes").update({ sort_order: k }).eq("id", id);
+  // 並べ替え（ドラッグ）: 動かした1件の sort_order を前後の間の値にする。ほかの端末には realtime で届く
+  async function reorder(n: Note, sort_order: number) {
+    if (sort_order === n.sort_order) return;
+    setNotes((ns) => ns.map((x) => (x.id === n.id ? { ...x, sort_order } : x)));
+    const { error } = await supabase.from("notes").update({ sort_order }).eq("id", n.id);
+    if (error) {
+      flash({ text: `並べ替えを保存できませんでした: ${error.message}` });
+      load();
     }
   }
 
   function trash(n: Note) {
     patch(n.id, { deleted_at: new Date().toISOString() });
     if (selectedId === n.id) setSelectedId(null);
-    flash({ text: "ゴミ箱に移しました", undo: () => patch(n.id, { deleted_at: null }) });
+    flash({
+      text: "ゴミ箱に移しました",
+      undo: () => patch(n.id, { deleted_at: null }),
+    });
   }
 
   async function purge(n: Note) {
@@ -408,6 +442,7 @@ function Notes({ session }: { session: Session }) {
                   setCursor(i);
                 }}
                 onToggle={toggleDone}
+                onReorder={query.trim() || view.kind === "trash" || showDone ? undefined : reorder}
               />
             )}
             {wantsCalendar && calError && !query.trim() && <p className="error small">カレンダー: {calError}</p>}
@@ -434,7 +469,7 @@ function Notes({ session }: { session: Session }) {
           onOpen={(id) => setSelectedId(id)}
           onAddSubtask={(t) => addSubtask(selected, t)}
           onToggleSub={toggleDone}
-          onMoveSub={moveSubtask}
+          onReorder={reorder}
           onPatchSub={(id, f) => patch(id, f)}
           onPatch={(f) => patch(selected.id, f)}
           onClose={() => setSelectedId(null)}
@@ -603,6 +638,7 @@ function NoteList({
   selectedId,
   onOpen,
   onToggle,
+  onReorder,
 }: {
   notes: Note[];
   events: CalendarEvent[];
@@ -614,16 +650,49 @@ function NoteList({
   selectedId: string | null;
   onOpen: (n: Note, index: number) => void;
   onToggle: (n: Note) => void;
+  /** 渡したときだけドラッグで並べ替えられる（検索・ゴミ箱・完了の表示では渡さない） */
+  onReorder?: (n: Note, sort_order: number) => void;
 }) {
   const today = jstDate();
+  // マウスは 6px 動かしたら、タッチは長押し（0.25 秒）でつかむ。ふつうのタップ・クリック・スクロールはそのまま
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
+    }),
+  );
+  // 「予定」は日ごとのかたまりの中だけで動かせる（日をまたぐと日付が変わってしまうため）
+  const groupOf = (n: Note) => (grouped ? (dayOf(n, today) ?? "") : "");
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (!onReorder || !over || active.id === over.id) return;
+    const a = notes.find((n) => n.id === active.id);
+    const o = notes.find((n) => n.id === over.id);
+    if (!a || !o || groupOf(a) !== groupOf(o) || a.pinned !== o.pinned) return; // ピン留めの境目もまたがない
+    const list = notes.filter((n) => groupOf(n) === groupOf(a));
+    const from = list.indexOf(a);
+    const to = list.indexOf(o);
+    onReorder(
+      a,
+      orderForMove(list, from, to, (x, y) => x.pinned === y.pinned),
+    );
+  }
+  const wrap = (ids: string[], children: React.ReactNode) => (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={onDragEnd}>
+      <SortableContext items={ids} strategy={verticalListSortingStrategy} disabled={!onReorder}>
+        {children}
+      </SortableContext>
+    </DndContext>
+  );
   const row = (n: Note, i: number) => {
     const sent = links.filter((l) => l.note_id === n.id);
     const rule = asRule(n.repeat_rule);
     const subs = (kids.get(n.id) ?? []).filter((c) => c.is_task);
     const parent = n.parent_id ? parentOf(n) : undefined;
     return (
-      <li
+      <SortableRow
         key={n.id}
+        id={n.id}
+        disabled={!onReorder}
         className={`row ${i === cursor ? "cursor" : ""} ${selectedId === n.id ? "selected" : ""} ${n.done_at ? "done" : ""}`}
         onClick={() => onOpen(n, i)}
       >
@@ -684,11 +753,15 @@ function NoteList({
             {!n.is_task && <span className="time">{formatDate(n.created_at)}</span>}
           </div>
         </div>
-      </li>
+      </SortableRow>
     );
   };
 
-  if (!grouped) return <ul className="list">{notes.map((n, i) => row(n, i))}</ul>;
+  if (!grouped)
+    return wrap(
+      notes.map((n) => n.id),
+      <ul className="list">{notes.map((n, i) => row(n, i))}</ul>,
+    );
 
   // 期限切れ → 今日 → 明日以降を日付ごとに。各日はカレンダーの予定が先、タスクが後
   const evDay = (e: CalendarEvent) => (e.date > today ? e.date : today); // 複数日の予定は今日以降の最初の日にだけ出す
@@ -699,6 +772,7 @@ function NoteList({
     const k = (d: string) => (d === "overdue" ? "0" : d || "9999");
     return k(x).localeCompare(k(y));
   });
+  // 日ごとに別の DndContext にする（ほかの日へは動かせない。動かすと日付が変わってしまうため）
   return (
     <ul className="list">
       {order.map((d) => {
@@ -720,11 +794,42 @@ function NoteList({
             {evs.map((e) => (
               <EventRow key={`${e.calendar}:${e.id}`} e={e} />
             ))}
-            {ts}
+            {wrap(
+              notes.filter((n) => groupOf(n) === d).map((n) => n.id),
+              ts,
+            )}
           </Fragment>
         );
       })}
     </ul>
+  );
+}
+
+/** 一覧の1行。行そのものをつかんで動かす（SortableContext が disabled なら普通の行） */
+function SortableRow({
+  id,
+  disabled,
+  className,
+  onClick,
+  children,
+}: {
+  id: string;
+  disabled: boolean;
+  className: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id, disabled });
+  return (
+    <li
+      ref={setNodeRef}
+      className={`${className} ${disabled ? "" : "sortable"} ${isDragging ? "dragging" : ""}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      onClick={onClick}
+      {...listeners}
+    >
+      {children}
+    </li>
   );
 }
 
@@ -763,7 +868,7 @@ function Detail({
   onOpen,
   onAddSubtask,
   onToggleSub,
-  onMoveSub,
+  onReorder,
   onPatchSub,
   onPatch,
   onClose,
@@ -779,7 +884,7 @@ function Detail({
   onOpen: (id: string) => void;
   onAddSubtask: (text: string) => void;
   onToggleSub: (n: Note) => void;
-  onMoveSub: (n: Note, dir: -1 | 1) => void;
+  onReorder: (n: Note, sort_order: number) => void;
   onPatchSub: (id: string, f: Partial<Note>) => void;
   onPatch: (f: Partial<Note>) => void;
   onClose: () => void;
@@ -900,7 +1005,7 @@ function Detail({
           }}
           onAdd={onAddSubtask}
           onToggle={onToggleSub}
-          onMove={onMoveSub}
+          onReorder={onReorder}
           onPatch={onPatchSub}
         />
       )}
@@ -927,7 +1032,12 @@ function Detail({
                 type="date"
                 value={note.due_date ?? ""}
                 disabled={trashed}
-                onChange={(e) => onPatch({ due_date: e.target.value || null, ...(e.target.value ? {} : { due_time: null }) })}
+                onChange={(e) =>
+                  onPatch({
+                    due_date: e.target.value || null,
+                    ...(e.target.value ? {} : { due_time: null }),
+                  })
+                }
               />
               {note.due_date && (
                 <input
@@ -997,7 +1107,7 @@ function SubtaskList({
   onOpen,
   onAdd,
   onToggle,
-  onMove,
+  onReorder,
   onPatch,
 }: {
   items: Note[];
@@ -1005,10 +1115,19 @@ function SubtaskList({
   onOpen: (id: string) => void;
   onAdd: (text: string) => void;
   onToggle: (n: Note) => void;
-  onMove: (n: Note, dir: -1 | 1) => void;
+  onReorder: (n: Note, sort_order: number) => void;
   onPatch: (id: string, f: Partial<Note>) => void;
 }) {
   const [text, setText] = useState("");
+  // つまみ（⋮⋮）だけでつかむので、マウスもタッチもすぐに動かせる
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
+    const from = items.findIndex((c) => c.id === active.id);
+    const to = items.findIndex((c) => c.id === over.id);
+    if (from < 0 || to < 0) return;
+    onReorder(items[from], orderForMove(items, from, to));
+  }
   const today = jstDate();
   const tasks = items.filter((c) => c.is_task);
   const done = tasks.filter((c) => c.done_at).length;
@@ -1028,43 +1147,42 @@ function SubtaskList({
           <span style={{ width: `${(done / tasks.length) * 100}%` }} />
         </div>
       )}
-      <ul>
-        {items.map((c, i) => (
-          <li key={c.id} className={`subtask ${c.done_at ? "done" : ""}`}>
-            {c.is_task ? (
-              <button
-                className={`check p${c.priority}`}
-                aria-label={c.done_at ? "未完了に戻す" : "完了にする"}
-                disabled={disabled}
-                onClick={() => onToggle(c)}
-              >
-                {c.done_at && <Check size={13} strokeWidth={3} />}
-              </button>
-            ) : (
-              <span className="dot">
-                <span className="bullet" />
-              </span>
-            )}
-            <SubtaskTitle key={`${c.id}:${headline(c)}`} note={c} disabled={disabled} onSave={(v) => onPatch(c.id, c.title ? { title: v } : { body: v })} />
-            {c.due_date && (
-              <span className={`subtask-due ${isOverdue(c, today) ? "overdue" : ""}`}>{formatDay(c.due_date, today)}</span>
-            )}
-            {!disabled && (
-              <span className="subtask-tools">
-                <button className="icon" title="上へ" disabled={i === 0} onClick={() => onMove(c, -1)}>
-                  <ChevronUp size={14} strokeWidth={2} />
+      <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={onDragEnd}>
+        <SortableContext items={items.map((c) => c.id)} strategy={verticalListSortingStrategy} disabled={disabled}>
+          <ul>
+            {items.map((c) => (
+              <SortableSubtask key={c.id} id={c.id} disabled={disabled} className={`subtask ${c.done_at ? "done" : ""}`}>
+                {c.is_task ? (
+                  <button
+                    className={`check p${c.priority}`}
+                    aria-label={c.done_at ? "未完了に戻す" : "完了にする"}
+                    disabled={disabled}
+                    onClick={() => onToggle(c)}
+                  >
+                    {c.done_at && <Check size={13} strokeWidth={3} />}
+                  </button>
+                ) : (
+                  <span className="dot">
+                    <span className="bullet" />
+                  </span>
+                )}
+                <SubtaskTitle
+                  key={`${c.id}:${headline(c)}`}
+                  note={c}
+                  disabled={disabled}
+                  onSave={(v) => onPatch(c.id, c.title ? { title: v } : { body: v })}
+                />
+                {c.due_date && (
+                  <span className={`subtask-due ${isOverdue(c, today) ? "overdue" : ""}`}>{formatDay(c.due_date, today)}</span>
+                )}
+                <button className="icon" title="開く" onClick={() => onOpen(c.id)}>
+                  <ChevronRight size={16} strokeWidth={2} />
                 </button>
-                <button className="icon" title="下へ" disabled={i === items.length - 1} onClick={() => onMove(c, 1)}>
-                  <ChevronDown size={14} strokeWidth={2} />
-                </button>
-              </span>
-            )}
-            <button className="icon" title="開く" onClick={() => onOpen(c.id)}>
-              <ChevronRight size={16} strokeWidth={2} />
-            </button>
-          </li>
-        ))}
-      </ul>
+              </SortableSubtask>
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
       {!disabled && (
         <form
           className="subtask-add"
@@ -1080,6 +1198,45 @@ function SubtaskList({
         </form>
       )}
     </section>
+  );
+}
+
+/** サブタスクの1行。左端のつまみをドラッグして並べ替える */
+function SortableSubtask({
+  id,
+  disabled,
+  className,
+  children,
+}: {
+  id: string;
+  disabled: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, setActivatorNodeRef, listeners, attributes, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  return (
+    <li
+      ref={setNodeRef}
+      className={`${className} ${isDragging ? "dragging" : ""}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+    >
+      {!disabled && (
+        <button
+          type="button"
+          className="icon grip"
+          ref={setActivatorNodeRef}
+          title="ドラッグで並べ替え"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical size={14} strokeWidth={2} />
+        </button>
+      )}
+      {children}
+    </li>
   );
 }
 
@@ -1120,7 +1277,11 @@ function RepeatEditor({
     const d = new Date(`${base}T00:00:00Z`);
     if (r.freq === "week" && !r.weekdays && r.interval === 1) r.weekdays = [d.getUTCDay()];
     if (r.freq === "month" && r.monthday === undefined) r.monthday = d.getUTCDate();
-    if (r.freq === "year" && r.month === undefined) Object.assign(r, { month: d.getUTCMonth() + 1, monthday: d.getUTCDate() });
+    if (r.freq === "year" && r.month === undefined)
+      Object.assign(r, {
+        month: d.getUTCMonth() + 1,
+        monthday: d.getUTCDate(),
+      });
     return r;
   }
   function apply(v: string) {
@@ -1136,7 +1297,10 @@ function RepeatEditor({
     }
     const r = fit(p.rule);
     setText(describeRepeat(r));
-    const f: Partial<Note> = { repeat_rule: r, ...(p.from ? { repeat_from: p.from } : {}) };
+    const f: Partial<Note> = {
+      repeat_rule: r,
+      ...(p.from ? { repeat_from: p.from } : {}),
+    };
     // 繰り返しには期日が要る。なければ今日にする
     if (!note.due_date && !note.scheduled_date) f.due_date = jstDate();
     onPatch(f);
@@ -1318,7 +1482,13 @@ function SendPanel({ note, text }: { note: Note; text: string }) {
     setBusy(true);
     setMsg("");
     try {
-      await api.send({ note_id: note.id, target, text: title, date: date || null, time: time || null });
+      await api.send({
+        note_id: note.id,
+        target,
+        text: title,
+        date: date || null,
+        time: time || null,
+      });
       setTarget(null);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
@@ -1467,7 +1637,10 @@ function AutoTextarea({
 function formatDate(iso: string) {
   const d = new Date(iso);
   const now = new Date();
-  const hm = d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  const hm = d.toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   if (d.toDateString() === now.toDateString()) return hm;
   const md = `${d.getMonth() + 1}/${d.getDate()}`;
   return d.getFullYear() === now.getFullYear() ? `${md} ${hm}` : `${d.getFullYear()}/${md}`;

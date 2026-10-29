@@ -32,7 +32,7 @@ export type Note = {
   last_done_at: string | null;
   done_count: number;
   parent_id: string | null; // サブタスクなら親のメモ（1階層だけ）
-  sort_order: number; // 親の中での並び
+  sort_order: number; // 手で並べた順（小さいほど上）。一覧でもサブタスクでも使う
   created_at: string;
   updated_at: string;
 };

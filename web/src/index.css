@@ -301,10 +301,16 @@ input, textarea { font-size: 16px; }
 .subtask.done .subtask-title { color: var(--muted); text-decoration: line-through; }
 .subtask-due { font-size: 12px; color: var(--muted); flex: none; }
 .subtask-due.overdue { color: var(--red); }
-.subtask-tools { display: none; flex: none; }
-.subtask:hover .subtask-tools, .subtask:focus-within .subtask-tools { display: inline-flex; }
 .subtask .icon { padding: 2px; }
 .subtask-add { display: flex; align-items: center; gap: 8px; color: var(--muted); min-height: 36px; }
 .subtask-add input { flex: 1; border: 0; background: none; font: inherit; font-size: 14px; padding: 4px 0; }
 .subtask-add input:focus { outline: none; }
-@media (hover: none) { .subtask-tools { display: inline-flex; } }
+
+/* ドラッグで並べ替え */
+.row.sortable { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.row.dragging, .subtask.dragging {
+  position: relative; z-index: 5; background: var(--bg, #fff);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .12); opacity: .95;
+}
+.subtask .grip { cursor: grab; color: var(--muted); touch-action: none; padding: 2px; margin-left: -4px; }
+.subtask .grip:active { cursor: grabbing; }
