@@ -18,7 +18,7 @@ export type Note = {
   pinned: boolean;
   archived: boolean;
   deleted_at: string | null;
-  source: "web" | "watch" | "mcp";
+  source: "web" | "watch" | "mcp" | "import";
   input_kind: string | null;
   tags: string[];
   is_task: boolean;
@@ -31,6 +31,8 @@ export type Note = {
   repeat_from: RepeatFrom; // 次の回を期日から数えるか、完了日から数えるか
   last_done_at: string | null;
   done_count: number;
+  parent_id: string | null; // サブタスクなら親のメモ（1階層だけ）
+  sort_order: number; // 親の中での並び
   created_at: string;
   updated_at: string;
 };

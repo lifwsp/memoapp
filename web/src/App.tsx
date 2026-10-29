@@ -4,10 +4,15 @@ import {
   ArchiveRestore,
   CalendarDays,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   Ellipsis,
   Hash,
   Inbox,
   Layers,
+  ListChecks,
   LogOut,
   PanelLeft,
   Pin,
@@ -35,6 +40,7 @@ import {
   jstDate,
   dayOf,
   isDueNow,
+  childrenOf,
   searchNotes,
   VIEW_LABEL,
   viewKey,
@@ -186,6 +192,7 @@ function Notes({ session }: { session: Session }) {
     [notes],
   );
   const selected = notes.find((n) => n.id === selectedId) ?? null;
+  const kids = useMemo(() => childrenOf(notes), [notes]);
 
   function flash(t: Toast) {
     window.clearTimeout(toastTimer.current);
@@ -239,11 +246,50 @@ function Notes({ session }: { session: Session }) {
     }
     const after = data as Note;
     setNotes((ns) => ns.map((x) => (x.id === n.id ? after : x)));
+    // 親子の連動（子もまとめて完了・親も未完了に戻る）は DB のトリガーが行うので読み直す
+    if (kids.has(n.id) || n.parent_id) load();
     if (!done) return;
     if (n.repeat_rule) {
       const next = after.due_date ?? after.scheduled_date;
       flash({ text: `完了: ${headline(n)} → 次は ${next ? formatDay(next) : "未定"}`, undo: () => patch(n.id, before) });
     } else flash({ text: `完了: ${headline(n)}`, undo: () => patch(n.id, { done_at: null }) });
+  }
+
+  // サブタスクを足す（親の末尾に）。親がメモでも、子はチェックの付くタスクにする
+  async function addSubtask(parent: Note, text: string) {
+    const { title, ...f } = taskFromText(text.trim());
+    if (!title) return;
+    const last = kids.get(parent.id)?.at(-1);
+    const row: Partial<Note> & { user_id: string } = {
+      ...f,
+      user_id: session.user.id,
+      parent_id: parent.id,
+      body: title,
+      source: "web",
+      is_task: true,
+      tags: parent.tags, // MCP と同じく親のタグを引き継ぐ（タグの一覧・件数には数えない）
+      sort_order: (last?.sort_order ?? 0) + 1,
+    };
+    const { data, error } = await supabase.from("notes").insert(row).select().single();
+    if (error) return flash({ text: `保存できませんでした: ${error.message}` });
+    setNotes((ns) => [data as Note, ...ns.filter((n) => n.id !== (data as Note).id)]);
+  }
+
+  // 並べ替え: 隣と入れ替える
+  async function moveSubtask(n: Note, dir: -1 | 1) {
+    const list = kids.get(n.parent_id ?? "") ?? [];
+    const i = list.findIndex((x) => x.id === n.id);
+    const other = list[i + dir];
+    if (!other) return;
+    // sort_order が同じこともあるので、並びの位置で振り直す
+    const order = list.map((x) => x.id);
+    [order[i], order[i + dir]] = [order[i + dir], order[i]];
+    const fields = new Map(order.map((id, k) => [id, k + 1]));
+    setNotes((ns) => ns.map((x) => (fields.has(x.id) ? { ...x, sort_order: fields.get(x.id)! } : x)));
+    for (const [id, k] of fields) {
+      const cur = list.find((x) => x.id === id)!;
+      if (cur.sort_order !== k) await supabase.from("notes").update({ sort_order: k }).eq("id", id);
+    }
   }
 
   function trash(n: Note) {
@@ -353,6 +399,8 @@ function Notes({ session }: { session: Session }) {
                 events={wantsCalendar && !query.trim() ? events : []}
                 grouped={view.kind === "today" && !query.trim() && !showDone}
                 links={links}
+                kids={kids}
+                parentOf={(n) => notes.find((x) => x.id === n.parent_id)}
                 cursor={cursor}
                 selectedId={selectedId}
                 onOpen={(n, i) => {
@@ -381,6 +429,13 @@ function Notes({ session }: { session: Session }) {
           note={selected}
           allTags={tags.map(([t]) => t)}
           links={links.filter((l) => l.note_id === selected.id)}
+          parent={notes.find((x) => x.id === selected.parent_id) ?? null}
+          subtasks={kids.get(selected.id) ?? []}
+          onOpen={(id) => setSelectedId(id)}
+          onAddSubtask={(t) => addSubtask(selected, t)}
+          onToggleSub={toggleDone}
+          onMoveSub={moveSubtask}
+          onPatchSub={(id, f) => patch(id, f)}
           onPatch={(f) => patch(selected.id, f)}
           onClose={() => setSelectedId(null)}
           onTrash={() => trash(selected)}
@@ -542,6 +597,8 @@ function NoteList({
   events,
   grouped,
   links,
+  kids,
+  parentOf,
   cursor,
   selectedId,
   onOpen,
@@ -551,6 +608,8 @@ function NoteList({
   events: CalendarEvent[];
   grouped: boolean;
   links: ExternalLink[];
+  kids: Map<string, Note[]>;
+  parentOf: (n: Note) => Note | undefined;
   cursor: number;
   selectedId: string | null;
   onOpen: (n: Note, index: number) => void;
@@ -560,6 +619,8 @@ function NoteList({
   const row = (n: Note, i: number) => {
     const sent = links.filter((l) => l.note_id === n.id);
     const rule = asRule(n.repeat_rule);
+    const subs = (kids.get(n.id) ?? []).filter((c) => c.is_task);
+    const parent = n.parent_id ? parentOf(n) : undefined;
     return (
       <li
         key={n.id}
@@ -591,6 +652,7 @@ function NoteList({
         <div className="row-main">
           <div className="row-title">{headline(n)}</div>
           <div className="row-meta">
+            {parent && <span className="parent-ref">↳ {headline(parent)}</span>}
             {n.due_date && (
               <span className={isOverdue(n, today) ? "overdue" : n.due_date === today ? "due-today" : ""}>
                 締切 {formatDay(n.due_date, today)}
@@ -604,6 +666,12 @@ function NoteList({
               <span className="repeat">
                 <Repeat size={11} strokeWidth={2.25} />
                 {describeRepeat(rule, n.repeat_from)}
+              </span>
+            )}
+            {subs.length > 0 && (
+              <span className="subcount">
+                <ListChecks size={11} strokeWidth={2.25} />
+                {subs.filter((c) => c.done_at).length}/{subs.length}
               </span>
             )}
             {n.tags.map((t) => (
@@ -690,6 +758,13 @@ function Detail({
   note,
   allTags,
   links,
+  parent,
+  subtasks,
+  onOpen,
+  onAddSubtask,
+  onToggleSub,
+  onMoveSub,
+  onPatchSub,
   onPatch,
   onClose,
   onTrash,
@@ -699,6 +774,13 @@ function Detail({
   note: Note;
   allTags: string[];
   links: ExternalLink[];
+  parent: Note | null;
+  subtasks: Note[];
+  onOpen: (id: string) => void;
+  onAddSubtask: (text: string) => void;
+  onToggleSub: (n: Note) => void;
+  onMoveSub: (n: Note, dir: -1 | 1) => void;
+  onPatchSub: (id: string, f: Partial<Note>) => void;
   onPatch: (f: Partial<Note>) => void;
   onClose: () => void;
   onTrash: () => void;
@@ -766,6 +848,19 @@ function Detail({
         </div>
       )}
 
+      {parent && (
+        <button
+          className="parent-link"
+          onClick={() => {
+            flush();
+            onOpen(parent.id);
+          }}
+        >
+          <ChevronLeft size={14} strokeWidth={2} />
+          {headline(parent)}
+        </button>
+      )}
+
       <div className="detail-title">
         {note.is_task && (
           <button className={`check big p${note.priority} ${note.done_at ? "is-done" : ""}`} onClick={onToggleDone} disabled={trashed}>
@@ -794,6 +889,21 @@ function Detail({
         }}
         onBlur={flush}
       />
+
+      {!note.parent_id && (
+        <SubtaskList
+          items={subtasks}
+          disabled={trashed}
+          onOpen={(id) => {
+            flush();
+            onOpen(id);
+          }}
+          onAdd={onAddSubtask}
+          onToggle={onToggleSub}
+          onMove={onMoveSub}
+          onPatch={onPatchSub}
+        />
+      )}
 
       <TagEditor tags={note.tags} allTags={allTags} disabled={trashed} onChange={(tags) => onPatch({ tags })} />
 
@@ -877,6 +987,114 @@ function Detail({
         {note.repeat_rule && note.last_done_at && ` ・ 前回の完了 ${formatDate(note.last_done_at)}（${note.done_count}回目）`}
       </p>
     </aside>
+  );
+}
+
+// サブタスクの一覧（詳細画面）。チェック・名前の編集・並べ替え・追加ができる。行の右の › で開くと日付なども付けられる
+function SubtaskList({
+  items,
+  disabled,
+  onOpen,
+  onAdd,
+  onToggle,
+  onMove,
+  onPatch,
+}: {
+  items: Note[];
+  disabled: boolean;
+  onOpen: (id: string) => void;
+  onAdd: (text: string) => void;
+  onToggle: (n: Note) => void;
+  onMove: (n: Note, dir: -1 | 1) => void;
+  onPatch: (id: string, f: Partial<Note>) => void;
+}) {
+  const [text, setText] = useState("");
+  const today = jstDate();
+  const tasks = items.filter((c) => c.is_task);
+  const done = tasks.filter((c) => c.done_at).length;
+  return (
+    <section className="subtasks">
+      <div className="subtasks-head">
+        <ListChecks size={14} strokeWidth={2} />
+        サブタスク
+        {tasks.length > 0 && (
+          <span className="subtasks-count">
+            {done}/{tasks.length}
+          </span>
+        )}
+      </div>
+      {tasks.length > 0 && (
+        <div className="subtasks-bar">
+          <span style={{ width: `${(done / tasks.length) * 100}%` }} />
+        </div>
+      )}
+      <ul>
+        {items.map((c, i) => (
+          <li key={c.id} className={`subtask ${c.done_at ? "done" : ""}`}>
+            {c.is_task ? (
+              <button
+                className={`check p${c.priority}`}
+                aria-label={c.done_at ? "未完了に戻す" : "完了にする"}
+                disabled={disabled}
+                onClick={() => onToggle(c)}
+              >
+                {c.done_at && <Check size={13} strokeWidth={3} />}
+              </button>
+            ) : (
+              <span className="dot">
+                <span className="bullet" />
+              </span>
+            )}
+            <SubtaskTitle key={`${c.id}:${headline(c)}`} note={c} disabled={disabled} onSave={(v) => onPatch(c.id, c.title ? { title: v } : { body: v })} />
+            {c.due_date && (
+              <span className={`subtask-due ${isOverdue(c, today) ? "overdue" : ""}`}>{formatDay(c.due_date, today)}</span>
+            )}
+            {!disabled && (
+              <span className="subtask-tools">
+                <button className="icon" title="上へ" disabled={i === 0} onClick={() => onMove(c, -1)}>
+                  <ChevronUp size={14} strokeWidth={2} />
+                </button>
+                <button className="icon" title="下へ" disabled={i === items.length - 1} onClick={() => onMove(c, 1)}>
+                  <ChevronDown size={14} strokeWidth={2} />
+                </button>
+              </span>
+            )}
+            <button className="icon" title="開く" onClick={() => onOpen(c.id)}>
+              <ChevronRight size={16} strokeWidth={2} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {!disabled && (
+        <form
+          className="subtask-add"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!text.trim()) return;
+            onAdd(text);
+            setText("");
+          }}
+        >
+          <Plus size={14} strokeWidth={2} />
+          <input placeholder="サブタスクを追加（例: 明日 見積もりを送る）" value={text} onChange={(e) => setText(e.target.value)} />
+        </form>
+      )}
+    </section>
+  );
+}
+
+function SubtaskTitle({ note, disabled, onSave }: { note: Note; disabled: boolean; onSave: (v: string) => void }) {
+  const cur = headline(note);
+  const [v, setV] = useState(cur); // 保存された名前が変わると key で作り直される
+  return (
+    <input
+      className="subtask-title"
+      value={v}
+      disabled={disabled}
+      onChange={(e) => setV(e.target.value)}
+      onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      onBlur={() => v.trim() && v !== cur && onSave(v.trim())}
+    />
   );
 }
 

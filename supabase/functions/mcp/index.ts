@@ -86,16 +86,23 @@ const tools = [
   },
   {
     name: "read_note",
-    description: "メモ1件を ID で読む。カレンダーに送った記録も返す。",
+    description: "メモ1件を ID で読む。サブタスク（subtasks）、サブタスクなら親（parent）、カレンダーに送った記録も返す。",
     inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
     annotations: { readOnlyHint: true },
   },
   {
     name: "create_note",
-    description: "メモかタスクを新しく作る。タスクにするなら is_task=true と、分かれば due_date / scheduled_date を入れる。",
+    description:
+      "メモかタスクを新しく作る。タスクにするなら is_task=true と、分かれば due_date / scheduled_date を入れる。parent_id を渡すとそのメモのサブタスクになる（is_task は既定 true、タグは親から引き継ぐ）。",
     inputSchema: {
       type: "object",
-      properties: { body: { type: "string" }, title: { type: "string" }, pinned: { type: "boolean" }, ...TASK_FIELDS },
+      properties: {
+        body: { type: "string" },
+        title: { type: "string" },
+        pinned: { type: "boolean" },
+        parent_id: { type: "string", description: "親のメモ ID。サブタスクは1階層まで（サブタスクの下には作れない）" },
+        ...TASK_FIELDS,
+      },
       required: ["body"],
     },
   },
@@ -114,6 +121,7 @@ const tools = [
         archived: { type: "boolean" },
         add_tags: { type: "array", items: { type: "string" } },
         remove_tags: { type: "array", items: { type: "string" } },
+        parent_id: { type: "string", description: "親のメモ ID にするとサブタスクへ移す。空文字でサブタスクから外す" },
         ...TASK_FIELDS,
       },
       required: ["id"],
@@ -121,7 +129,8 @@ const tools = [
   },
   {
     name: "complete_task",
-    description: "タスクを完了にする（done=false で未完了に戻す）。タスクでないメモに使うと、タスクにしてから完了にする。",
+    description:
+      "タスクを完了にする（done=false で未完了に戻す）。タスクでないメモに使うと、タスクにしてから完了にする。親を完了にすると未完了のサブタスクもまとめて完了になる（繰り返しの親なら、次の回に向けてサブタスクのチェックが外れる）。サブタスクを未完了に戻すと、完了していた親も未完了に戻る。",
     inputSchema: {
       type: "object",
       properties: { id: { type: "string" }, done: { type: "boolean", description: "既定 true" } },
@@ -156,7 +165,7 @@ const tools = [
 ];
 
 const COLS =
-  "id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,priority,repeat_rule,repeat_from,last_done_at,pinned,archived,source,input_kind,created_at,updated_at";
+  "id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,priority,repeat_rule,repeat_from,last_done_at,pinned,archived,source,input_kind,parent_id,sort_order,created_at,updated_at";
 
 function todayJst(offsetDays = 0) {
   return new Date(Date.now() + 9 * 3600_000 + offsetDays * 86400_000).toISOString().slice(0, 10);
@@ -284,7 +293,16 @@ async function callTool(name: string, a: Args) {
         .select("type,status,title,due,url,error,created_at")
         .eq("note_id", data.id)
         .order("created_at");
-      return { ...present(data), sent_to: links ?? [] };
+      const [{ data: subs }, { data: parent }] = await Promise.all([
+        mine().eq("parent_id", data.id).order("sort_order").order("created_at"),
+        data.parent_id ? mine().eq("id", data.parent_id).maybeSingle() : Promise.resolve({ data: null }),
+      ]);
+      return {
+        ...present(data),
+        subtasks: presentAll(subs),
+        ...(parent ? { parent: { id: parent.id, title: parent.title, body: parent.body, done_at: parent.done_at } } : {}),
+        sent_to: links ?? [],
+      };
     }
     case "create_note": {
       const body = str(a.body)?.trim();
@@ -296,6 +314,19 @@ async function callTool(name: string, a: Args) {
         pinned: !!a.pinned,
         source: "mcp",
       };
+      const parentId = str(a.parent_id);
+      if (parentId) {
+        const { data: p } = await mine().eq("id", parentId).maybeSingle();
+        if (!p) throw new Error("親のメモが見つかりません");
+        const { data: last } = await sb
+          .from("notes")
+          .select("sort_order")
+          .eq("parent_id", parentId)
+          .order("sort_order", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        Object.assign(row, { parent_id: parentId, is_task: true, tags: p.tags, sort_order: (last?.sort_order ?? 0) + 1 });
+      }
       taskFields(a, row);
       fillFirstDue(row);
       const { data, error } = await sb.from("notes").insert(row).select(COLS).single();
@@ -312,6 +343,7 @@ async function callTool(name: string, a: Args) {
       if (str(a.append)) patch.body = `${(patch.body as string | undefined) ?? cur.body}\n${str(a.append)}`;
       if (typeof a.pinned === "boolean") patch.pinned = a.pinned;
       if (typeof a.archived === "boolean") patch.archived = a.archived;
+      if (str(a.parent_id) !== undefined) patch.parent_id = str(a.parent_id) || null;
       taskFields(a, patch);
       fillFirstDue(patch, cur);
       const add = cleanTags(a.add_tags) ?? [];
@@ -413,13 +445,14 @@ async function handle(msg: RpcReq) {
       return ok({
         protocolVersion: (msg.params?.protocolVersion as string) ?? PROTOCOL,
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "wristmemo", version: "0.4.0" },
+        serverInfo: { name: "wristmemo", version: "0.5.0" },
         instructions: [
           "WristMemo は持ち主ひとり用のメモ帳兼タスク管理。ウォッチから音声で入れた短いメモが多く、誤変換を含むことがある。",
           "メモには tags（複数可）が付く。タグのないメモは「受信箱」＝未整理。整理を頼まれたら list_tags で既存タグを確かめてから edit_note の add_tags で付ける。",
           "タスクは is_task=true のメモ。due_date は締め切り、scheduled_date は取り組む予定の日で、別物として扱う。「今日やること」は list_tasks view=today。",
           "繰り返しタスクは repeat（「毎月1日」「3週間ごと」など）と repeat_from（due=期日から / done=完了日から）を持つ。complete_task すると完了扱いにはならず、期日が次の回へ進む。",
-          "完了は complete_task。タスクの置き場は WristMemo だけ（Todoist は使わない）。",
+          "サブタスク: タスク（やメモ）の下に1階層だけ作れる（create_note の parent_id）。サブタスクには parent_id が付き、親の read_note で subtasks として並ぶ。list_tasks などではサブタスクも1件のタスクとして出る。",
+          "完了は complete_task。タスクの正本は WristMemo だけ。Todoist など他のサービスに同じタスクが残っていても参照せず、WristMemo の状態を正とする（Todoist は使っていない）。",
           "予定（日時の決まった出来事）は Google カレンダーが本体。WristMemo に予定をメモとしてコピーしない。予定を作るなら add_to_calendar、見るなら agenda。",
           "通知: 持ち主への通知は Muse の役目。各タスクの remind_at（時刻のないタスクは 9:00）に知らせる。毎朝 agenda で今日の予定と期限切れを確かめ、その日の remind_at にリマインダーを設定するとよい。",
           "メモの削除はできない。日付はすべて日本時間。",

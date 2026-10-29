@@ -28,6 +28,8 @@ export function jstDate(offsetDays = 0) {
 }
 
 const live = (n: Note) => !n.deleted_at && !n.archived;
+// サブタスクは親の中に並べる。一覧に単独で出すのは「予定」で日付があるときだけ
+const top = (n: Note) => !n.parent_id;
 const open = (n: Note) => !(n.is_task && n.done_at);
 export const isOverdue = (n: Note, today = jstDate()) => n.is_task && !n.done_at && !!n.due_date && n.due_date < today;
 
@@ -35,7 +37,7 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
   const today = jstDate();
   switch (view.kind) {
     case "inbox":
-      return pinnedFirst(notes.filter((n) => live(n) && open(n) && n.tags.length === 0));
+      return pinnedFirst(notes.filter((n) => live(n) && open(n) && top(n) && n.tags.length === 0));
     case "today":
       return notes
         .filter(
@@ -46,11 +48,11 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
         )
         .sort((a, b) => (dayOf(a, today) ?? "").localeCompare(dayOf(b, today) ?? "") || byTask(a, b));
     case "all":
-      return pinnedFirst(notes.filter((n) => live(n) && (showDone || open(n))));
+      return pinnedFirst(notes.filter((n) => live(n) && top(n) && (showDone || open(n))));
     case "tag":
-      return pinnedFirst(notes.filter((n) => live(n) && (showDone || open(n)) && n.tags.includes(view.tag)));
+      return pinnedFirst(notes.filter((n) => live(n) && top(n) && (showDone || open(n)) && n.tags.includes(view.tag)));
     case "archive":
-      return notes.filter((n) => !n.deleted_at && n.archived);
+      return notes.filter((n) => !n.deleted_at && top(n) && n.archived);
     case "trash":
       return notes.filter((n) => n.deleted_at);
     case "settings":
@@ -96,7 +98,7 @@ export function searchNotes(notes: Note[], q: string) {
 
 export function countTags(notes: Note[]) {
   const c = new Map<string, number>();
-  for (const n of notes) if (live(n) && open(n)) for (const t of n.tags) c.set(t, (c.get(t) ?? 0) + 1);
+  for (const n of notes) if (live(n) && top(n) && open(n)) for (const t of n.tags) c.set(t, (c.get(t) ?? 0) + 1);
   return [...c.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ja"));
 }
 
@@ -126,3 +128,17 @@ export function extractTags(text: string) {
     .trim();
   return { tags: [...new Set(tags)], rest };
 }
+
+/** 親 id → サブタスク（並び順）。ゴミ箱のものは除く */
+export function childrenOf(notes: Note[]) {
+  const m = new Map<string, Note[]>();
+  for (const n of notes) {
+    if (!n.parent_id || n.deleted_at) continue;
+    const list = m.get(n.parent_id) ?? [];
+    list.push(n);
+    m.set(n.parent_id, list);
+  }
+  for (const list of m.values()) list.sort(bySortOrder);
+  return m;
+}
+export const bySortOrder = (a: Note, b: Note) => a.sort_order - b.sort_order || a.created_at.localeCompare(b.created_at);

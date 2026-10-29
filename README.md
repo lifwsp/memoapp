@@ -34,6 +34,7 @@ npx supabase@2.122.0 functions deploy watch-notes --project-ref "$SUPABASE_PROJE
 - 新しいプロジェクトは表に権限が自動で付かないため、`0002_notes_grants.sql` で authenticated / service_role に付与（anon には付けない）。
 - Edge Functions: `watch-notes`（ウォッチの受け口）、`integrations`（PWA 用: カレンダー送信・予定の読み込み・Google 接続）、`mcp`（Muse 用 MCP サーバー）。
 - Todoist の取り込み（一度だけ・済み）: `node --experimental-strip-types scripts/import-todoist.mts [--dry]`（`client_id = todoist:<id>` なので再実行しても二重にならない）。
+- Todoist で平たくしたサブタスクを親子に戻す（一度だけ・migration 0007 の後）: `node --experimental-strip-types scripts/link-todoist-subtasks.mts [--dry]`（Todoist は読むだけ）。
 - 新規登録は無効化済み（`disable_signup`）。ログインは `owner@wristmemo.local` のみ。
 
 ## web/（Vite + React + PWA）

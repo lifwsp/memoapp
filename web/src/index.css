@@ -115,7 +115,7 @@ input, textarea { font-size: 16px; }
 .check.p2 { border-color: var(--orange); }
 .check.p3 { border-color: var(--red); border-width: 2px; }
 .row.done .check { background: #a9a69c; }
-.row.done .check, .check.is-done { border-color: #a9a69c; background: #a9a69c; }
+.row.done .check, .subtask.done .check, .check.is-done { border-color: #a9a69c; background: #a9a69c; }
 .check.big { width: 24px; height: 24px; margin-top: 6px; }
 .check:hover { background: #eeece6; }
 
@@ -279,3 +279,32 @@ input, textarea { font-size: 16px; }
 .error.small { font-size: 12px; }
 .group-head.overdue { color: var(--red); }
 .row.empty-day { color: var(--muted, #999); font-size: 13px; cursor: default; }
+
+/* サブタスク */
+.row-meta .subcount { display: inline-flex; align-items: center; gap: 3px; }
+.row-meta .parent-ref { color: var(--muted); max-width: 16em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.parent-link {
+  display: inline-flex; align-items: center; gap: 2px; align-self: flex-start;
+  border: 0; background: none; color: var(--muted); font-size: 13px; padding: 2px 0; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.parent-link:hover { color: var(--ink); }
+.subtasks { border-top: 1px solid var(--line); padding: 8px 0 4px; }
+.subtasks-head { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.subtasks-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.subtasks-bar { height: 3px; background: var(--line); border-radius: 2px; margin: 6px 0 2px; overflow: hidden; }
+.subtasks-bar span { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+.subtasks ul { list-style: none; margin: 0; padding: 0; }
+.subtask { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.subtask .subtask-title { flex: 1; min-width: 0; border: 0; background: none; font: inherit; font-size: 14px; padding: 4px 0; color: inherit; }
+.subtask .subtask-title:focus { outline: none; border-bottom: 1px solid var(--line); }
+.subtask.done .subtask-title { color: var(--muted); text-decoration: line-through; }
+.subtask-due { font-size: 12px; color: var(--muted); flex: none; }
+.subtask-due.overdue { color: var(--red); }
+.subtask-tools { display: none; flex: none; }
+.subtask:hover .subtask-tools, .subtask:focus-within .subtask-tools { display: inline-flex; }
+.subtask .icon { padding: 2px; }
+.subtask-add { display: flex; align-items: center; gap: 8px; color: var(--muted); min-height: 36px; }
+.subtask-add input { flex: 1; border: 0; background: none; font: inherit; font-size: 14px; padding: 4px 0; }
+.subtask-add input:focus { outline: none; }
+@media (hover: none) { .subtask-tools { display: inline-flex; } }
