@@ -53,11 +53,12 @@ input, textarea { font-size: 16px; }
 .nav-label svg { color: var(--muted); flex: none; }
 .nav button.active .nav-label svg { color: var(--ink); }
 .nav .count { font-size: 12px; color: var(--muted); }
-.nav-tag-row { display: flex; align-items: center; min-width: 0; }
-.nav-tag-row > button:first-child { flex: 1; min-width: 0; gap: 8px; }
-.nav-tag-row .nav-label { overflow-wrap: anywhere; }
-.nav .rename-tag { flex: none; padding: 9px; color: var(--muted); }
-.rename-tag-form { padding: 6px 10px 12px; }
+.page-title { display: flex; flex: 1; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; min-width: 0; }
+.topbar .page-title h1 { flex: 0 1 auto; max-width: 100%; }
+.tag-rename { position: relative; }
+.rename-tag { border: none; background: none; padding: 2px 0; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.rename-tag:hover { color: var(--ink); text-decoration: underline; }
+.rename-tag-form { position: absolute; top: 100%; left: 0; width: 240px; max-width: 70vw; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); box-shadow: 0 4px 16px #0002; z-index: 6; }
 .rename-tag-form input { width: 100%; min-width: 0; }
 .rename-tag-form > div { display: flex; gap: 4px; margin-top: 4px; }
 .rename-tag-form small { color: var(--muted); font-size: 11px; }

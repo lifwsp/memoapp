@@ -409,7 +409,7 @@ function Notes({ session }: { session: Session }) {
   const canShowDone = !query.trim() && ["today", "all", "tag"].includes(view.kind);
 
   const nav = (
-    <Sidebar view={view} counts={counts} tags={tags} onGo={go} onRenameTag={renameTag} onLogout={() => supabase.auth.signOut()} />
+    <Sidebar view={view} counts={counts} tags={tags} onGo={go} onLogout={() => supabase.auth.signOut()} />
   );
 
   return (
@@ -428,7 +428,12 @@ function Notes({ session }: { session: Session }) {
           <button className="icon desktop-only" title="サイドバー（[）" onClick={() => setSidebarOpen((o) => !o)}>
             <PanelLeft size={18} strokeWidth={1.75} />
           </button>
-          <h1>{title}</h1>
+          <div className="page-title">
+            <h1>{title}</h1>
+            {view.kind === "tag" && !query.trim() && (
+              <TagRename key={view.tag} tag={view.tag} tags={tags} onRenameTag={renameTag} />
+            )}
+          </div>
           <input
             ref={searchRef}
             className="search"
@@ -564,20 +569,10 @@ function emptyText(view: View, searching: boolean) {
   }
 }
 
-function Sidebar({
-  view,
-  counts,
-  tags,
-  onGo,
-  onRenameTag,
-  onLogout,
-}: {
-  view: View;
-  counts: { inbox: number; today: number };
+function TagRename({ tag, tags, onRenameTag }: {
+  tag: string;
   tags: [string, number][];
-  onGo: (v: View) => void;
   onRenameTag: (oldName: string, newName: string) => Promise<void>;
-  onLogout: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -601,6 +596,44 @@ function Sidebar({
       setBusy(false);
     }
   }
+  return (
+    <div className="tag-rename">
+      <button type="button" className="rename-tag" aria-label="タグ名を変更" title="タグ名を変更" disabled={busy} onClick={() => { setEditing(tag); setName(tag); setError(""); }}>
+        <Pencil size={13} strokeWidth={1.5} />
+      </button>
+      {editing !== null && (
+        <form className="rename-tag-form" onSubmit={submitRename}>
+          <input aria-label="新しいタグ名" autoFocus value={name} disabled={busy}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
+              if (e.key === "Escape" && !busy) setEditing(null);
+            }} />
+          <div>
+            <button type="submit" disabled={busy || !name.trim()}>{busy ? "変更中…" : "変更"}</button>
+            <button type="button" disabled={busy} onClick={() => setEditing(null)}>キャンセル</button>
+          </div>
+          <small>すべてのメモのタグ名を変更します。</small>
+          {error && <p className="error" role="alert">{error}</p>}
+        </form>
+      )}
+    </div>
+  );
+}
+
+function Sidebar({
+  view,
+  counts,
+  tags,
+  onGo,
+  onLogout,
+}: {
+  view: View;
+  counts: { inbox: number; today: number };
+  tags: [string, number][];
+  onGo: (v: View) => void;
+  onLogout: () => void;
+}) {
   const item = (v: View, count?: number) => (
     <button key={viewKey(v)} className={viewKey(v) === viewKey(view) ? "active" : ""} onClick={() => onGo(v)}>
       <span className="nav-label">
@@ -620,33 +653,7 @@ function Sidebar({
       {item({ kind: "today" }, counts.today)}
       {item({ kind: "all" })}
       {tags.length > 0 && <div className="nav-head">タグ</div>}
-      {tags.map(([t, n]) => (
-        <Fragment key={t}>
-          <div className="nav-tag-row">
-            {item({ kind: "tag", tag: t }, n)}
-            <button type="button" className="rename-tag" aria-label={`タグ「${t}」の名前を変更`} title="タグ名を変更"
-              disabled={busy} onClick={() => { setEditing(t); setName(t); setError(""); }}>
-              <Pencil size={14} />
-            </button>
-          </div>
-          {editing === t && (
-            <form className="rename-tag-form" onSubmit={submitRename}>
-              <input aria-label="新しいタグ名" autoFocus value={name} disabled={busy}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
-                  if (e.key === "Escape" && !busy) setEditing(null);
-                }} />
-              <div>
-                <button type="submit" disabled={busy || !name.trim()}>{busy ? "変更中…" : "変更"}</button>
-                <button type="button" disabled={busy} onClick={() => setEditing(null)}>キャンセル</button>
-              </div>
-              <small>すべてのメモのタグ名を変更します。</small>
-              {error && <p className="error" role="alert">{error}</p>}
-            </form>
-          )}
-        </Fragment>
-      ))}
+      {tags.map(([t, n]) => item({ kind: "tag", tag: t }, n))}
       <div className="nav-head" />
       {item({ kind: "archive" })}
       {item({ kind: "trash" })}
