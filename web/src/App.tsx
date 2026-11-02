@@ -17,6 +17,7 @@ import {
   Pin,
   MapPin,
   PinOff,
+  Pencil,
   Plus,
   Repeat,
   Settings2,
@@ -232,6 +233,17 @@ function Notes({ session }: { session: Session }) {
     }
   }
 
+  async function renameTag(oldName: string, newName: string) {
+    const { error } = await supabase.rpc("rename_tag", { p_old: oldName, p_new: newName });
+    if (error) throw new Error(`タグ名を変更できませんでした: ${error.message}`);
+    setNotes((ns) => ns.map((n) => n.tags.includes(oldName)
+      ? { ...n, tags: [...new Set(n.tags.map((t) => t === oldName ? newName : t))] }
+      : n));
+    setView((v) => v.kind === "tag" && v.tag === oldName ? { kind: "tag", tag: newName } : v);
+    flash({ text: `タグ「${oldName}」を「${newName}」に変更しました` });
+    await load();
+  }
+
   async function create(text: string) {
     const { tags: t, rest } = extractTags(text);
     if (!rest) return;
@@ -397,7 +409,7 @@ function Notes({ session }: { session: Session }) {
   const canShowDone = !query.trim() && ["today", "all", "tag"].includes(view.kind);
 
   const nav = (
-    <Sidebar view={view} counts={counts} tags={tags} onGo={go} onLogout={() => supabase.auth.signOut()} />
+    <Sidebar view={view} counts={counts} tags={tags} onGo={go} onRenameTag={renameTag} onLogout={() => supabase.auth.signOut()} />
   );
 
   return (
@@ -557,14 +569,38 @@ function Sidebar({
   counts,
   tags,
   onGo,
+  onRenameTag,
   onLogout,
 }: {
   view: View;
   counts: { inbox: number; today: number };
   tags: [string, number][];
   onGo: (v: View) => void;
+  onRenameTag: (oldName: string, newName: string) => Promise<void>;
   onLogout: () => void;
 }) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submitRename(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || editing === null) return;
+    const next = name.trim().replace(/^[#＃]/, "").trim();
+    if (!next) return setError("タグ名を入力してください");
+    if (next === editing) return setEditing(null);
+    if (tags.some(([t]) => t === next) && !window.confirm(`「${next}」は既にあります。このタグに統合しますか？`)) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onRenameTag(editing, next);
+      setEditing(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   const item = (v: View, count?: number) => (
     <button key={viewKey(v)} className={viewKey(v) === viewKey(view) ? "active" : ""} onClick={() => onGo(v)}>
       <span className="nav-label">
@@ -584,7 +620,33 @@ function Sidebar({
       {item({ kind: "today" }, counts.today)}
       {item({ kind: "all" })}
       {tags.length > 0 && <div className="nav-head">タグ</div>}
-      {tags.map(([t, n]) => item({ kind: "tag", tag: t }, n))}
+      {tags.map(([t, n]) => (
+        <Fragment key={t}>
+          <div className="nav-tag-row">
+            {item({ kind: "tag", tag: t }, n)}
+            <button type="button" className="rename-tag" aria-label={`タグ「${t}」の名前を変更`} title="タグ名を変更"
+              disabled={busy} onClick={() => { setEditing(t); setName(t); setError(""); }}>
+              <Pencil size={14} />
+            </button>
+          </div>
+          {editing === t && (
+            <form className="rename-tag-form" onSubmit={submitRename}>
+              <input aria-label="新しいタグ名" autoFocus value={name} disabled={busy}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault();
+                  if (e.key === "Escape" && !busy) setEditing(null);
+                }} />
+              <div>
+                <button type="submit" disabled={busy || !name.trim()}>{busy ? "変更中…" : "変更"}</button>
+                <button type="button" disabled={busy} onClick={() => setEditing(null)}>キャンセル</button>
+              </div>
+              <small>すべてのメモのタグ名を変更します。</small>
+              {error && <p className="error" role="alert">{error}</p>}
+            </form>
+          )}
+        </Fragment>
+      ))}
       <div className="nav-head" />
       {item({ kind: "archive" })}
       {item({ kind: "trash" })}
