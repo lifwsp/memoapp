@@ -41,6 +41,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { supabase, type ExternalLink, type Note } from "./lib/supabase";
+import { loadAllPages } from "./lib/pagination";
 import { api, type CalendarEvent, type Parsed, type Status } from "./lib/integrations";
 import { asRule, describeRepeat, parseRepeat, taskFromText } from "./lib/repeat";
 import {
@@ -146,11 +147,16 @@ function Notes({ session }: { session: Session }) {
   const toastTimer = useRef<number>(0);
 
   async function load() {
-    const { data, error } = await supabase.from("notes").select("*").order("created_at", { ascending: false });
-    if (error) setLoadError(error.message);
-    else {
+    try {
+      const data = await loadAllPages<Note>((from, to) =>
+        supabase.from("notes").select("*")
+          .order("created_at", { ascending: false }).order("id")
+          .range(from, to),
+      );
       setLoadError("");
-      setNotes(data as Note[]);
+      setNotes(data);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error));
     }
   }
   async function loadLinks() {
@@ -209,6 +215,7 @@ function Notes({ session }: { session: Session }) {
     () => ({
       inbox: filterNotes(notes, { kind: "inbox" }, false).length,
       today: filterNotes(notes, { kind: "today" }, false).filter((n) => isDueNow(n)).length,
+      undated: filterNotes(notes, { kind: "undated" }, false).length,
     }),
     [notes],
   );
@@ -252,7 +259,8 @@ function Notes({ session }: { session: Session }) {
       user_id: session.user.id,
       body: rest,
       source: "web",
-      tags: view.kind === "tag" ? [...new Set([view.tag, ...t])] : t,
+      tags: (view.kind === "tag" || view.kind === "undated") && view.tag ? [...new Set([view.tag, ...t])] : t,
+      ...(view.kind === "undated" ? { is_task: true } : {}),
     };
     if (view.kind === "today") {
       // 「毎月1日 カード支払い」「明日15時 電話」のような日時・繰り返しの言葉を読む
@@ -453,6 +461,18 @@ function Notes({ session }: { session: Session }) {
           <Settings />
         ) : (
           <>
+            {view.kind === "undated" && !query.trim() && (
+              <label className="undated-filter">
+                タグで絞り込み
+                <select aria-label="期限なしタスクのタグ" value={view.tag ?? ""}
+                  onChange={(e) => { setView({ kind: "undated", tag: e.target.value || undefined }); setCursor(0); }}>
+                  <option value="">すべてのタグ</option>
+                  {[...new Set(filterNotes(notes, { kind: "undated" }, false).flatMap((n) => n.tags).concat(view.tag ? [view.tag] : []))]
+                    .sort((a, b) => a.localeCompare(b, "ja"))
+                    .map((tag) => <option key={tag} value={tag}>#{tag}</option>)}
+                </select>
+              </label>
+            )}
             {canAdd && <QuickAdd inputRef={addRef} view={view} onAdd={create} />}
             {isList && (
               <NoteList
@@ -542,6 +562,7 @@ function Notes({ session }: { session: Session }) {
 
 const VIEW_ICON: Record<string, LucideIcon> = {
   inbox: Inbox,
+  undated: ListChecks,
   today: CalendarDays,
   all: Layers,
   tag: Hash,
@@ -562,6 +583,8 @@ function emptyText(view: View, searching: boolean) {
       return "受信箱は空です。タグを付けたメモはここから消えます。";
     case "today":
       return "日付の入ったタスクも予定もありません";
+    case "undated":
+      return view.tag ? `#${view.tag} の期限なしタスクはありません` : "未完了の期限なしタスクはありません";
     case "trash":
       return "ゴミ箱は空です";
     default:
@@ -629,7 +652,7 @@ function Sidebar({
   onLogout,
 }: {
   view: View;
-  counts: { inbox: number; today: number };
+  counts: { inbox: number; today: number; undated: number };
   tags: [string, number][];
   onGo: (v: View) => void;
   onLogout: () => void;
@@ -651,6 +674,7 @@ function Sidebar({
       <div className="brand">WristMemo</div>
       {item({ kind: "inbox" }, counts.inbox)}
       {item({ kind: "today" }, counts.today)}
+      {item({ kind: "undated" }, counts.undated)}
       {item({ kind: "all" })}
       {tags.length > 0 && <div className="nav-head">タグ</div>}
       {tags.map(([t, n]) => item({ kind: "tag", tag: t }, n))}
@@ -681,6 +705,8 @@ function QuickAdd({
   const placeholder =
     view.kind === "today"
       ? "タスクを追加（「明日15時 歯医者」「毎月10日 積立」も可・日付なしは今日）"
+      : view.kind === "undated"
+        ? `期限なしタスクを追加（Enter${view.tag ? `・#${view.tag}` : "・#タグ も書けます"}）`
       : view.kind === "tag"
           ? `#${view.tag} にメモを追加（Enter）`
           : "メモを追加（Enter・#タグ も書けます）";

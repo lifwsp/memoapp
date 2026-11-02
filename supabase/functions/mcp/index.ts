@@ -21,6 +21,8 @@ const DEFAULT_REMIND_TIME = "09:00";
 const MCP_TOKEN = Deno.env.get("MCP_TOKEN") ?? "";
 const PROTOCOL = "2025-06-18";
 
+import { nullableDate, nullableTime, nullableReminder, validateRule, taskPage } from "../_shared/task-input.ts";
+
 type Args = Record<string, unknown>;
 const str = (v: unknown) => (typeof v === "string" ? v : undefined);
 
@@ -28,9 +30,12 @@ const PRIORITY = { type: "number", description: "優先度 0=なし 1=低 2=中 
 const TASK_FIELDS = {
   tags: { type: "array", items: { type: "string" }, description: "タグ（例: 買い物, 仕事）。# は付けない" },
   is_task: { type: "boolean", description: "true にするとタスクとして扱う（完了チェックが付く）" },
-  due_date: { type: "string", description: "締め切り日 YYYY-MM-DD（日本時間）。空文字で消す" },
-  due_time: { type: "string", description: "締め切り時刻 HH:MM（日本時間）。空文字で消す" },
-  scheduled_date: { type: "string", description: "取り組む予定の日 YYYY-MM-DD。締め切りとは別。空文字で消す" },
+  due_date: { type: ["string", "null"], description: "締め切り日 YYYY-MM-DD（日本時間）。空文字で消す" },
+  due_time: { type: ["string", "null"], description: "締め切り時刻 HH:MM（日本時間）。空文字で消す" },
+  scheduled_date: { type: ["string", "null"], description: "取り組む予定の日 YYYY-MM-DD。締め切りとは別。空文字で消す" },
+  remind_at: { type: ["string", "null"], description: "明示的な通知日時（タイムゾーン付き ISO 8601）。null/空文字で消去し、期日からの既定通知に戻す" },
+  repeat_rule: { type: ["object", "null"], description: "構造化した繰り返し規則。repeat / repeat_text とは同時指定不可", properties: { freq: { type: "string", enum: ["day", "week", "month", "year"] }, interval: { type: "integer", minimum: 1, maximum: 1000 }, weekdays: { type: "array", items: { type: "integer", minimum: 0, maximum: 6 } }, monthday: { type: "integer", minimum: -1, maximum: 31 }, month: { type: "integer", minimum: 1, maximum: 12 } }, required: ["freq", "interval"] },
+  repeat_text: { type: ["string", "null"], description: "repeat の別名。日本語の繰り返し表現。null/空文字で解除" },
   priority: PRIORITY,
   repeat: {
     type: "string",
@@ -48,13 +53,15 @@ const tools = [
   {
     name: "list_tasks",
     description:
-      "WristMemo のタスク（is_task のメモ）を一覧する。view: today=今日やること（予定日か締め切りが今日以前の未完了＋締切まで10日を切った締め切りタスク。後者には soon=true と days_left が付く）, overdue=締め切りを過ぎた未完了, upcoming=明日以降に予定・締め切りがある未完了, deadline=締め切りタスク（締切が明日〜30日後で、やる日・繰り返し・時刻がない＝今も手を付けられるもの。締切の近い順。days_left と、10日を切ると soon=true が付く。「手が空いたけど何やる？」に使う）, inbox=日付のない未完了, done=最近完了したもの, all=未完了すべて。日付はすべて日本時間。各タスクの remind_at は知らせるべき日時（due_time がなければ 9:00）、repeat_text は繰り返しの説明。",
+      "WristMemo のタスク（is_task のメモ）を一覧する。view: today=今日やること（予定日か締め切りが今日以前の未完了＋締切まで10日を切った締め切りタスク。後者には soon=true と days_left が付く）, overdue=締め切りを過ぎた未完了, upcoming=明日以降に予定・締め切りがある未完了, deadline=締め切りタスク（締切が明日〜30日後で、やる日・繰り返し・時刻がない＝今も手を付けられるもの。締切の近い順。days_left と、10日を切ると soon=true が付く。「手が空いたけど何やる？」に使う）, inbox=期限なし未完了（due_date=null、予定日の有無を問わない）, done=最近完了したもの, all=未完了すべて。日付はすべて日本時間。各タスクの remind_at は知らせるべき日時（due_time がなければ 9:00）、repeat_text は繰り返しの説明。",
     inputSchema: {
       type: "object",
       properties: {
         view: { type: "string", enum: ["today", "overdue", "upcoming", "deadline", "inbox", "done", "all"] },
         tag: { type: "string", description: "このタグが付いたものだけ" },
         days: { type: "number", description: "upcoming の範囲（日数、既定 14）" },
+        limit: { type: "integer", minimum: 1, maximum: 100, description: "ページ件数（既定100、doneは30）。has_more=true なら next_offset で続きを取得" },
+        offset: { type: "integer", minimum: 0, description: "取得開始位置（既定0）" },
       },
       required: ["view"],
     },
@@ -101,7 +108,7 @@ const tools = [
         body: { type: "string" },
         title: { type: "string" },
         pinned: { type: "boolean" },
-        parent_id: { type: "string", description: "親のメモ ID。サブタスクは1階層まで（サブタスクの下には作れない）" },
+        parent_id: { type: ["string", "null"], description: "親のメモ ID。サブタスクは1階層まで（サブタスクの下には作れない）" },
         ...TASK_FIELDS,
       },
       required: ["body"],
@@ -122,7 +129,7 @@ const tools = [
         archived: { type: "boolean" },
         add_tags: { type: "array", items: { type: "string" } },
         remove_tags: { type: "array", items: { type: "string" } },
-        parent_id: { type: "string", description: "親のメモ ID にするとサブタスクへ移す。空文字でサブタスクから外す" },
+        parent_id: { type: ["string", "null"], description: "親のメモ ID にするとサブタスクへ移す。空文字でサブタスクから外す" },
         ...TASK_FIELDS,
       },
       required: ["id"],
@@ -166,7 +173,7 @@ const tools = [
 ];
 
 const COLS =
-  "id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,priority,repeat_rule,repeat_from,last_done_at,pinned,archived,source,input_kind,parent_id,sort_order,created_at,updated_at";
+  "id,title,body,tags,is_task,done_at,due_date,due_time,scheduled_date,priority,repeat_rule,repeat_from,last_done_at,pinned,archived,source,input_kind,parent_id,sort_order,created_at,updated_at,reminder_at";
 
 function todayJst(offsetDays = 0) {
   return new Date(Date.now() + 9 * 3600_000 + offsetDays * 86400_000).toISOString().slice(0, 10);
@@ -176,11 +183,13 @@ type Row = Record<string, unknown>;
 /** Muse が読みやすいよう、繰り返しの説明と知らせる日時を足す */
 function present(r: Row | null): Row | null {
   if (!r) return r;
-  const out: Row = { ...r };
+  const { reminder_at, ...fields } = r;
+  const out: Row = { ...fields };
+  if (reminder_at && r.is_task && !r.done_at) out.remind_at = reminder_at;
   const rule = asRule(r.repeat_rule);
   if (rule) out.repeat_text = describeRepeat(rule, r.repeat_from as "due" | "done");
   const day = (r.due_date ?? r.scheduled_date) as string | null;
-  if (r.is_task && !r.done_at && day) {
+  if (r.is_task && !r.done_at && day && !reminder_at) {
     const t = ((r.due_time as string | null) ?? DEFAULT_REMIND_TIME).slice(0, 5);
     out.remind_at = `${day}T${t}:00+09:00`;
   }
@@ -191,16 +200,27 @@ const cleanTags = (v: unknown) =>
   Array.isArray(v)
     ? [...new Set(v.filter((t): t is string => typeof t === "string").map((t) => t.replace(/^#/, "").trim()).filter(Boolean))]
     : undefined;
-const dateOrNull = (v: unknown) => (typeof v === "string" ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null) : undefined);
-const timeOrNull = (v: unknown) => (typeof v === "string" ? (/^\d{1,2}:\d{2}$/.test(v) ? v : null) : undefined);
-
 /** create / edit で共通のタスク属性を patch に入れる */
 function taskFields(a: Args, patch: Record<string, unknown>) {
+  if (a.is_task !== undefined && typeof a.is_task !== "boolean") throw new Error("is_task は boolean で指定してください");
   const tags = cleanTags(a.tags);
   if (tags) patch.tags = tags;
   if (typeof a.is_task === "boolean") patch.is_task = a.is_task;
-  for (const k of ["due_date", "scheduled_date"]) if (dateOrNull(a[k]) !== undefined) patch[k] = dateOrNull(a[k]);
-  if (timeOrNull(a.due_time) !== undefined) patch.due_time = timeOrNull(a.due_time);
+  for (const k of ["due_date", "scheduled_date"]) if (a[k] !== undefined) patch[k] = nullableDate(a[k], k);
+  if (a.due_time !== undefined) patch.due_time = nullableTime(a.due_time);
+  if (a.remind_at !== undefined) patch.reminder_at = nullableReminder(a.remind_at);
+  const repeatKeys = ["repeat", "repeat_text", "repeat_rule"].filter(k => a[k] !== undefined);
+  if (repeatKeys.length > 1) throw new Error("repeat / repeat_text / repeat_rule は1つだけ指定してください");
+  if (a.repeat_text !== undefined) a = { ...a, repeat: a.repeat_text === null ? "" : a.repeat_text };
+  if (a.repeat !== undefined && typeof a.repeat !== "string") throw new Error("repeat / repeat_text は文字列で指定してください");
+  for (const key of ["tags", "add_tags", "remove_tags"]) {
+    if (a[key] !== undefined && (!Array.isArray(a[key]) || !(a[key] as unknown[]).every(t => typeof t === "string")))
+      throw new Error(`${key} は文字列の配列で指定してください`);
+  }
+  if (a.repeat_rule !== undefined) {
+    patch.repeat_rule = validateRule(a.repeat_rule);
+    if (patch.repeat_rule && a.is_task !== false) patch.is_task = true;
+  }
   if (typeof a.priority === "number") patch.priority = Math.max(0, Math.min(3, Math.round(a.priority)));
   if (typeof a.repeat === "string") {
     if (!a.repeat.trim()) patch.repeat_rule = null;
@@ -209,9 +229,10 @@ function taskFields(a: Args, patch: Record<string, unknown>) {
       if (!p) throw new Error(`繰り返しを読み取れませんでした: ${a.repeat}（例: 毎月1日 / 3週間ごと / 毎週火曜）`);
       patch.repeat_rule = p.rule;
       if (p.from && a.repeat_from === undefined) patch.repeat_from = p.from;
-      patch.is_task = true;
+      if (a.is_task !== false) patch.is_task = true;
     }
   }
+  if (a.repeat_from !== undefined && a.repeat_from !== "due" && a.repeat_from !== "done") throw new Error("repeat_from は due / done を指定してください");
   if (a.repeat_from === "due" || a.repeat_from === "done") patch.repeat_from = a.repeat_from;
   // 日付を付けたらタスクとみなす
   if ((patch.due_date || patch.scheduled_date) && patch.is_task === undefined) patch.is_task = true;
@@ -220,7 +241,7 @@ function taskFields(a: Args, patch: Record<string, unknown>) {
 /** 繰り返しなのに日付がないときは、規則に合う最初の日を期日にする */
 function fillFirstDue(patch: Row, cur?: Row) {
   const rule = (patch.repeat_rule ?? (patch.repeat_rule === undefined ? cur?.repeat_rule : null)) as RepeatRule | null;
-  if (!rule) return;
+  if (!rule || patch.is_task === false || patch.due_date === null) return;
   const due = patch.due_date !== undefined ? patch.due_date : cur?.due_date;
   const sch = patch.scheduled_date !== undefined ? patch.scheduled_date : cur?.scheduled_date;
   if (!due && !sch) patch.due_date = firstOccurrence(rule, jstToday());
@@ -234,10 +255,11 @@ async function callTool(name: string, a: Args) {
   switch (name) {
     case "list_tasks": {
       const today = todayJst();
+      const { limit, offset } = taskPage({ ...a, limit: a.limit ?? (a.view === "done" ? 30 : 100) });
       let q = mine().eq("is_task", true).eq("archived", false);
       const view = str(a.view) ?? "today";
       if (view === "done") {
-        q = q.not("done_at", "is", null).order("done_at", { ascending: false }).limit(30);
+        q = q.not("done_at", "is", null).order("done_at", { ascending: false });
       } else {
         q = q.is("done_at", null);
         // 今日: やる日か締切が今日まで＋締切まで 10 日を切った締め切りタスク（PWA の今日の数・ウォッチと同じ）
@@ -251,7 +273,7 @@ async function callTool(name: string, a: Args) {
           q = q.or(
             `and(scheduled_date.gt.${today},scheduled_date.lte.${until}),and(due_date.gt.${today},due_date.lte.${until})`,
           );
-        } else if (view === "inbox") q = q.is("due_date", null).is("scheduled_date", null);
+        } else if (view === "inbox") q = q.is("due_date", null);
         else if (view === "deadline")
           q = q
             .gt("due_date", today)
@@ -262,20 +284,20 @@ async function callTool(name: string, a: Args) {
         q = q
           .order("due_date", { ascending: true, nullsFirst: false })
           .order("priority", { ascending: false })
-          .order("created_at", { ascending: true })
-          .limit(100);
+          .order("created_at", { ascending: true });
       }
       if (str(a.tag)) q = q.contains("tags", [str(a.tag)!.replace(/^#/, "")]);
-      const { data, error } = await q;
+      const { data, error } = await q.order("id", { ascending: true }).range(offset, offset + limit);
       if (error) throw new Error(error.message);
-      const tasks = presentAll(data);
+      const has_more = (data?.length ?? 0) > limit;
+      const tasks = presentAll(data?.slice(0, limit) ?? []);
       if (view === "deadline" || view === "today")
         for (const t of tasks) {
           if (view === "today" && !isDeadlineSoon(t as never, today)) continue;
           t.days_left = daysLeft(t.due_date as string, today);
           t.soon = isDeadlineSoon(t as never, today);
         }
-      return { today, view, tasks };
+      return { today, view, tasks, limit, offset, has_more, next_offset: has_more ? offset + limit : null };
     }
     case "search_notes": {
       let q = mine().order("created_at", { ascending: false }).limit(Math.min(Number(a.limit) || 20, 100));
@@ -333,6 +355,7 @@ async function callTool(name: string, a: Args) {
         pinned: !!a.pinned,
         source: "mcp",
       };
+      if (a.parent_id !== undefined && a.parent_id !== null && typeof a.parent_id !== "string") throw new Error("parent_id は ID または null を指定してください");
       const parentId = str(a.parent_id);
       if (parentId) {
         const { data: p } = await mine().eq("id", parentId).maybeSingle();
@@ -362,7 +385,14 @@ async function callTool(name: string, a: Args) {
       if (str(a.append)) patch.body = `${(patch.body as string | undefined) ?? cur.body}\n${str(a.append)}`;
       if (typeof a.pinned === "boolean") patch.pinned = a.pinned;
       if (typeof a.archived === "boolean") patch.archived = a.archived;
-      if (str(a.parent_id) !== undefined) patch.parent_id = str(a.parent_id) || null;
+      if (a.parent_id !== undefined) {
+        if (a.parent_id !== null && typeof a.parent_id !== "string") throw new Error("parent_id は ID または null を指定してください");
+        patch.parent_id = str(a.parent_id) || null;
+        if (patch.parent_id) {
+          const { data: parent } = await mine().eq("id", patch.parent_id).maybeSingle();
+          if (!parent) throw new Error("親のメモが見つかりません");
+        }
+      }
       taskFields(a, patch);
       fillFirstDue(patch, cur);
       const add = cleanTags(a.add_tags) ?? [];
@@ -371,7 +401,7 @@ async function callTool(name: string, a: Args) {
         const base = (patch.tags as string[] | undefined) ?? (cur.tags as string[]);
         patch.tags = [...new Set([...base, ...add])].filter((t) => !remove.has(t));
       }
-      const { data, error } = await sb.from("notes").update(patch).eq("id", id).eq("user_id", OWNER_USER_ID).select(COLS).single();
+      const { data, error } = await sb.from("notes").update(patch).eq("id", id).eq("user_id", OWNER_USER_ID).is("deleted_at", null).select(COLS).single();
       if (error) throw new Error(error.message);
       return present(data);
     }
@@ -468,6 +498,7 @@ async function handle(msg: RpcReq) {
         instructions: [
           "WristMemo は持ち主ひとり用のメモ帳兼タスク管理。ウォッチから音声で入れた短いメモが多く、誤変換を含むことがある。",
           "メモには tags（複数可）が付く。タグのないメモは「受信箱」＝未整理。整理を頼まれたら list_tags で既存タグを確かめてから edit_note の add_tags で付ける。",
+          "通常メモのタスク化は edit_note(id, is_task=true)。期限なしは due_date=null。is_task=false でメモに戻す。同じIDを更新し本文・作成日時・sourceを保持する。買い物などはタグで整理し list_tasks(view=inbox, tag=買い物) で確認する。list_tasks の has_more が true なら next_offset を offset にして続け、全件取得する。",
           "タスクは is_task=true のメモ。due_date は締め切り、scheduled_date は取り組む予定の日で、別物として扱う。「今日やること」は list_tasks view=today。",
           "繰り返しタスクは repeat（「毎月1日」「3週間ごと」など）と repeat_from（due=期日から / done=完了日から）を持つ。complete_task すると完了扱いにはならず、期日が次の回へ進む。",
           "サブタスク: タスク（やメモ）の下に1階層だけ作れる（create_note の parent_id）。サブタスクには parent_id が付き、親の read_note で subtasks として並ぶ。list_tasks などではサブタスクも1件のタスクとして出る。",

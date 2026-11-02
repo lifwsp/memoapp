@@ -21,6 +21,8 @@
 body { margin: 0; }
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
+.undated-filter { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 20px; color: var(--muted); font-size: 13px; }
+.undated-filter select { max-width: 100%; font: inherit; font-size: 16px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 /* iOS は 16px 未満の入力欄にフォーカスするとズームするため */
 input, textarea { font-size: 16px; }
 

@@ -4,6 +4,7 @@ import { isDeadlineSoon, isDeadlineTask } from "../../../supabase/functions/_sha
 // 「受信箱」「今日」などは保存場所ではなく、メモの属性から作る絞り込み結果（MCP の list_tasks と同じ定義）
 export type View =
   | { kind: "inbox" }
+  | { kind: "undated"; tag?: string }
   | { kind: "today" } // 「予定」: 期限切れ・今日・明日以降のタスクとカレンダーの予定を日付順に1本で見る
   | { kind: "all" }
   | { kind: "tag"; tag: string }
@@ -13,6 +14,7 @@ export type View =
 
 export const VIEW_LABEL: Record<Exclude<View["kind"], "tag">, string> = {
   inbox: "受信箱",
+  undated: "期限なしタスク",
   today: "予定",
   all: "すべて",
   archive: "アーカイブ",
@@ -29,7 +31,7 @@ export function jstDate(offsetDays = 0) {
 }
 
 const live = (n: Note) => !n.deleted_at && !n.archived;
-// サブタスクは親の中に並べる。一覧に単独で出すのは「予定」で日付があるときだけ
+// 通常はサブタスクを親の中に並べる。「予定」と「期限なしタスク」では単独でも出す
 const top = (n: Note) => !n.parent_id;
 const open = (n: Note) => !(n.is_task && n.done_at);
 export const isOverdue = (n: Note, today = jstDate()) => n.is_task && !n.done_at && !!n.due_date && n.due_date < today;
@@ -39,6 +41,9 @@ export function filterNotes(notes: Note[], view: View, showDone: boolean): Note[
   switch (view.kind) {
     case "inbox":
       return pinnedFirst(notes.filter((n) => live(n) && open(n) && top(n) && n.tags.length === 0));
+    case "undated":
+      // やる日が設定されていても、期限がなければ対象。親やタグの有無で隠さない。
+      return pinnedFirst(notes.filter((n) => live(n) && n.is_task && n.done_at === null && n.due_date === null && (!view.tag || n.tags.includes(view.tag))));
     case "today":
       return notes
         .filter(
